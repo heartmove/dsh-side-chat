@@ -28,6 +28,12 @@ right-side panel, scoped to the conversation it was started from.
   display, image attachments (paste / drag-and-drop), send/stop controls, and
   thinking-duration display — all reuse the same UI primitives as the main
   conversation.
+- **Bring AI replies back to the main conversation.** Every assistant reply in
+  the side chat can be brought into the current main conversation's composer:
+  select part of it with the mouse, or insert the whole reply in one click.
+  Either way you can choose **"Insert directly"** (verbatim) or
+  **"Summarize & insert"** (the side chat's inherited model summarizes it
+  first). The text is written to the main composer draft only — never sent.
 - **Resizable, collapsible panel.** Drag to resize (280–720 px), collapse and
   expand; no close button.
 - **Language-aware.** The plugin follows DSH's language setting (Chinese /
@@ -138,6 +144,20 @@ By default (`sendImmediately` on), selecting text **sends it immediately** and
 appends your configured **default prompt**. Turn `sendImmediately` off in
 settings to stage the selection as an attachment instead, so you can review and
 edit before sending.
+
+### Bring replies back to the main conversation
+
+Assistant replies in the side chat can be brought into the current main
+conversation's composer (written to the draft only — **never sent**):
+
+1. **Bring a selection.** Select part of an assistant reply in the side chat,
+   then choose **"Insert directly"** (verbatim) or **"Summarize & insert"** (the
+   side chat's inherited model summarizes it first) from the floating menu.
+2. **Bring the whole reply.** Each assistant reply has **"Insert directly"** and
+   **"Summarize & insert"** buttons under its text, for inserting the full reply
+   (or its summary) in one click.
+3. Brought-back text is appended to the main composer draft (on a new paragraph
+   when the draft is non-empty), ready for you to review, edit, then send.
 
 ## Settings
 

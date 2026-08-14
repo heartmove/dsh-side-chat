@@ -689,15 +689,17 @@ function SelectionMenu(props: { store: SidechatStore; t: (key: SidechatLocaleKey
 /**
  * The floating bring-back-to-main menu: listens to the document selection and,
  * when the selection is inside an assistant reply in the side-chat panel, shows
- * a single button that appends the selected text to the main composer without
- * sending it.
+ * two actions — "insert directly" and "summarize then insert" — both appending
+ * into the main composer without sending.
  */
 function BringBackMenu(props: {
   store: SidechatStore
   t: (key: SidechatLocaleKey) => string
   bringToMain: (text: string) => boolean
+  summarizeBring: (text: string) => Promise<boolean>
 }) {
   const [local, setLocal] = useState<SelectionAnchor | null>(null)
+  const [summarizing, setSummarizing] = useState(false)
 
   useEffect(() => {
     const compute = (): void => {
@@ -739,6 +741,15 @@ function BringBackMenu(props: {
   }, [])
 
   if (local === null) return null
+
+  const summarize = async (): Promise<void> => {
+    setSummarizing(true)
+    const ok = await props.summarizeBring(local.text)
+    setSummarizing(false)
+    if (!ok) props.store.patch({ error: props.t('insert.summarizeFailed') })
+    else setLocal(null)
+  }
+
   return (
     <div className={css.selectionMenu} style={{ left: local.x, top: local.y - 46 }}>
       <button
@@ -749,7 +760,10 @@ function BringBackMenu(props: {
           setLocal(null)
         }}
       >
-        {props.t('insert.bring')}
+        {props.t('insert.direct')}
+      </button>
+      <button type="button" className={css.selectionButton} disabled={summarizing} onClick={() => { void summarize() }}>
+        {summarizing ? props.t('insert.summarizing') : props.t('insert.summarize')}
       </button>
     </div>
   )
@@ -761,6 +775,7 @@ function SidechatPanel(props: {
   t: (key: SidechatLocaleKey) => string
   formatDuration: (ms: number) => string
   bringToMain: (text: string) => boolean
+  summarizeBring: (text: string) => Promise<boolean>
 }) {
   const { panel } = useSyncExternalStore(props.store.subscribe, props.store.getSnapshot)
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -789,6 +804,8 @@ function SidechatPanel(props: {
   const [dragActive, setDragActive] = useState(false)
   const [lightbox, setLightbox] = useState<ComposerAttachment | null>(null)
   const [limits, setLimits] = useState<{ mediaTypes: string[]; maxImageBytes: number; maxImagesPerMessage: number; maxMessageImageBytes: number } | null>(null)
+  /** Index of the assistant message whose "summarize then insert" is in flight. */
+  const [summarizingIndex, setSummarizingIndex] = useState<number | null>(null)
 
   const activeItem = panel.items.find((i) => i.childId === panel.activeChildId)
   const activeRunning = activeItem?.running ?? false
@@ -1121,7 +1138,21 @@ function SidechatPanel(props: {
                       if (!props.bringToMain(text)) props.store.patch({ error: props.t('insert.failed') })
                     }}
                   >
-                    {props.t('insert.whole')}
+                    {props.t('insert.direct')}
+                  </button>
+                  <button
+                    type="button"
+                    className={css.messageInsertButton}
+                    disabled={summarizingIndex === index}
+                    onClick={() => {
+                      setSummarizingIndex(index)
+                      void props.summarizeBring(text).then((ok) => {
+                        setSummarizingIndex(null)
+                        if (!ok) props.store.patch({ error: props.t('insert.summarizeFailed') })
+                      })
+                    }}
+                  >
+                    {summarizingIndex === index ? props.t('insert.summarizing') : props.t('insert.summarize')}
                   </button>
                 </div>
               )}
@@ -1313,6 +1344,25 @@ export function apply(ctx: Context): void {
 
   // Localized copy follows the DSH locale (module-level mirror for callbacks).
   let activeLocale = ctx.locale.getSnapshot().active
+
+  /** Summarize text with the side chat's inherited model, then append the summary to the main composer. */
+  const summarizeBring = async (text: string): Promise<boolean> => {
+    const trimmed = text.trim()
+    if (trimmed === '') return false
+    const snap = store.getSnapshot().panel
+    if (snap.parentSessionId === '') return false
+    const result = await api.summarize({
+      parentSessionId: snap.parentSessionId,
+      text: trimmed,
+      ...(snap.provider !== '' ? { provider: snap.provider } : {}),
+      ...(snap.model !== '' ? { model: snap.model } : {}),
+      ...(snap.effort !== '' ? { reasoningEffort: snap.effort } : {}),
+      locale: activeLocale,
+    })
+    if (!result.ok) return false
+    return bringToMain(result.value.summary)
+  }
+
   ctx.effect(() => {
     const offZh = ctx.locale.register(LOCALE_NS, 'zh', zh)
     const offEn = ctx.locale.register(LOCALE_NS, 'en', en)
@@ -1375,8 +1425,8 @@ export function apply(ctx: Context): void {
     const formatDuration = (ms: number): string => formatRunDuration(ms, activeLocale)
     root.render(<>
       <SelectionMenu store={store} t={t} />
-      <BringBackMenu store={store} t={t} bringToMain={bringToMain} />
-      <SidechatPanel store={store} t={t} formatDuration={formatDuration} bringToMain={bringToMain} />
+      <BringBackMenu store={store} t={t} bringToMain={bringToMain} summarizeBring={summarizeBring} />
+      <SidechatPanel store={store} t={t} formatDuration={formatDuration} bringToMain={bringToMain} summarizeBring={summarizeBring} />
     </>)
 
     return () => {

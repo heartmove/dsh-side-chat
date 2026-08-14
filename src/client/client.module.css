@@ -31,8 +31,13 @@
   white-space: nowrap;
 }
 
-.selectionButton:hover {
+.selectionButton:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.selectionButton:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 /* ---- Right-side panel ---- */
@@ -233,9 +238,10 @@
   color: var(--dsw-alias-label-primary);
 }
 
-/* Per-assistant-message "bring whole reply to main" action. */
+/* Per-assistant-message "bring whole reply to main" actions. */
 .messageActions {
   display: flex;
+  gap: 6px;
   margin-top: 6px;
 }
 
@@ -251,9 +257,14 @@
   cursor: pointer;
 }
 
-.messageInsertButton:hover {
+.messageInsertButton:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
+}
+
+.messageInsertButton:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 /* Reasoning disclosure (main-conversation Think row) */

@@ -191,7 +191,28 @@ export interface SideLlmEffort {
   description?: string
 }
 
-/** The llm face (model/effort catalog). */
+/** One model-request stream chunk (minimal structural view for text collection). */
+export interface SideLlmStreamChunk {
+  type: string
+  text?: string
+}
+
+/** Minimal generate options the summarize route builds (a hand-built user prompt). */
+export interface SideLlmGenerateOptions {
+  provider: string
+  model: string
+  reasoningEffort?: string
+  maxTokens?: number
+  signal?: AbortSignal
+  messages: Array<{
+    id?: string
+    role: 'user' | 'assistant' | 'system'
+    content: Array<{ type: 'text'; text: string }>
+    source?: { kind: string }
+  }>
+}
+
+/** The llm face (model/effort catalog + one-shot streaming calls). */
 export interface SideLlm {
   listProviders(): SideLlmProvider[]
   listModels(provider: string): Promise<SideLlmModel[]>
@@ -201,6 +222,7 @@ export interface SideLlm {
     name: string
     reasoning?: { efforts: readonly SideLlmEffort[]; defaultEffort?: string }
   }>
+  stream(options: SideLlmGenerateOptions): AsyncIterable<SideLlmStreamChunk>
 }
 
 /** The client locale service face. */

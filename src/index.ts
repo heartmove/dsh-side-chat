@@ -539,6 +539,53 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
     return { accepted: true }
   }
 
+  /** Summarize one piece of text with the side chat's (inherited) model. */
+  const summarize = async (payload: unknown): Promise<{ summary: string }> => {
+    const parentSessionId = requireString(payload, 'parentSessionId')
+    const text = requireString(payload, 'text')
+    const record = payload as { provider?: unknown; model?: unknown; reasoningEffort?: unknown; locale?: unknown }
+
+    // Inherit the launching conversation's model unless the client supplied one.
+    const parent = parentOf(parentSessionId)
+    const parentConfig = parent.session.requestHeader?.()?.config
+    const provider = typeof record.provider === 'string' && record.provider !== '' ? record.provider : (parentConfig?.provider ?? parent.options.provider ?? '')
+    const model = typeof record.model === 'string' && record.model !== '' ? record.model : (parentConfig?.model ?? parent.options.model ?? '')
+    if (provider === '' || model === '') {
+      throw new SidechatError('bad-request', 'no model available for summarization')
+    }
+    const reasoningEffort = typeof record.reasoningEffort === 'string' && record.reasoningEffort !== '' ? record.reasoningEffort : parentConfig?.reasoningEffort
+
+    const locale = typeof record.locale === 'string' && record.locale === 'en' ? 'en' : 'zh'
+    const prompt = locale === 'en'
+      ? `Summarize the following content concisely. Keep the key points and output only the summary:\n\n${text}`
+      : `请对以下内容做简明扼要的摘要，保留关键信息，只输出摘要本身：\n\n${text}`
+
+    const chunks = ctx.llm.stream({
+      provider,
+      model,
+      ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
+      maxTokens: 1024,
+      messages: [{
+        id: randomUUID(),
+        role: 'user',
+        content: [{ type: 'text', text: prompt }],
+        source: { kind: 'user' },
+      }],
+    })
+
+    let summary = ''
+    for await (const chunk of chunks) {
+      if (chunk.type === 'text-delta' && typeof chunk.text === 'string') {
+        summary += chunk.text
+      }
+    }
+    const trimmed = summary.trim()
+    if (trimmed === '') {
+      throw new SidechatError('summarize-empty', 'the model returned no summary', 502)
+    }
+    return { summary: trimmed }
+  }
+
   /** Full model directory: provider groups → models → reasoning efforts. */
   const directory = async (): Promise<{
     groups: Array<{
@@ -617,6 +664,7 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
     'sidechat.stop': stop,
     'sidechat.selectModel': selectModel,
     'sidechat.selectPermission': selectPermission,
+    'sidechat.summarize': summarize,
     'sidechat.directory': directory,
     'sidechat.permissions': permissions,
     'sidechat.limits': limits,
