@@ -794,23 +794,33 @@ function QuestionFab(props: {
 
   useEffect(() => {
     let raf = 0
+    let missing = 0
     const tick = (): void => {
       const el = document.querySelector<HTMLElement>('[data-question-key], [data-approval-key]')
-      if (el !== null) {
-        const header = (el.firstElementChild as HTMLElement | null) ?? el
-        const rect = header.getBoundingClientRect()
-        const size = 32
-        const left = Math.min(rect.right + 8, window.innerWidth - size - 8)
-        const top = rect.top + rect.height / 2
-        setPos({ left, top })
-      } else {
+      if (el === null) {
+        missing += 1
+        // A brief grace period covers the initial render; if the dialog stays
+        // absent, clear the tracked question so this entry disappears too.
+        if (missing > 30) {
+          props.store.setMainQuestion(null)
+          return
+        }
         setPos(null)
+        raf = requestAnimationFrame(tick)
+        return
       }
+      missing = 0
+      const header = (el.firstElementChild as HTMLElement | null) ?? el
+      const rect = header.getBoundingClientRect()
+      const size = 32
+      const left = Math.min(rect.right + 8, window.innerWidth - size - 8)
+      const top = rect.top + rect.height / 2
+      setPos({ left, top })
       raf = requestAnimationFrame(tick)
     }
     tick()
     return () => { cancelAnimationFrame(raf) }
-  }, [])
+  }, [props.store])
 
   const style: CSSProperties = pos !== null
     ? { left: pos.left, top: pos.top, transform: 'translateY(-50%)' }
