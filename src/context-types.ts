@@ -73,12 +73,14 @@ export interface SideSessionList {
   byId: Record<string, SideSessionSummary>
 }
 
-/** The client sessions service face (list feed). */
+/** The client sessions service face (list feed + scope resolution). */
 export interface SideSessionsService {
   list: {
     getSnapshot(): SideSessionList
     subscribe(fn: () => void): () => void
   }
+  /** Resolve an Agent-scoped context view for a listed session id (use-and-discard). */
+  scope(id: string): Context | undefined
 }
 
 /** Agent options (provider/model/maxTokens). */
@@ -251,6 +253,24 @@ export interface SideCommandsService {
   execute(agent: SideAgent, line: string, signal: AbortSignal): Promise<unknown>
 }
 
+/** The per-session composer input face this plugin writes to (draft-only). */
+export interface SideSessionInput {
+  /** Replace the session composer draft (never submits). */
+  setDraft(text: string): void
+  /** Live input state store (draft read). */
+  state: { getSnapshot(): { draft: string } }
+  /** Surface a notice on the session composer. */
+  notify(level: 'info' | 'error', text: string): void
+}
+
+/** The conversation service face (`ctx.conversation`) — input registry only. */
+export interface SideConversationService {
+  input: {
+    /** Resolve the input facade for one session-scope context. */
+    for(actx: Context): SideSessionInput
+  }
+}
+
 declare module 'cordis' {
   interface Context {
     webServer: SideWebServer
@@ -267,6 +287,7 @@ declare module 'cordis' {
     slots: SideSlotsService
     attachments: SideAttachmentStore
     commands: SideCommandsService
+    conversation: SideConversationService
     inject(deps: string[], callback: (ctx: Context) => void): void
     get(name: string): unknown | undefined
     on(name: string, listener: (...args: any[]) => any): () => void

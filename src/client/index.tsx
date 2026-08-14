@@ -44,7 +44,7 @@ import css from './client.module.css'
 import './layout.css'
 
 /** Services required before mounting. */
-export const inject = ['sessions', 'locale', 'slots']
+export const inject = ['sessions', 'locale', 'slots', 'conversation']
 
 /** A text selection the floating menu anchors to. */
 interface SelectionAnchor {
@@ -580,6 +580,12 @@ function SelectionMenu(props: { store: SidechatStore; t: (key: SidechatLocaleKey
         setLocal(null)
         return
       }
+      // Never offer "ask in side chat" for selections inside the side-chat panel
+      // (those belong to the bring-back-to-main menu instead).
+      if (element !== null && element.closest('[data-dsh-side-chat]') !== null) {
+        setLocal(null)
+        return
+      }
       const rect = range.getBoundingClientRect()
       if (rect.width === 0 && rect.height === 0) {
         setLocal(null)
@@ -680,8 +686,82 @@ function SelectionMenu(props: { store: SidechatStore; t: (key: SidechatLocaleKey
   )
 }
 
+/**
+ * The floating bring-back-to-main menu: listens to the document selection and,
+ * when the selection is inside an assistant reply in the side-chat panel, shows
+ * a single button that appends the selected text to the main composer without
+ * sending it.
+ */
+function BringBackMenu(props: {
+  store: SidechatStore
+  t: (key: SidechatLocaleKey) => string
+  bringToMain: (text: string) => boolean
+}) {
+  const [local, setLocal] = useState<SelectionAnchor | null>(null)
+
+  useEffect(() => {
+    const compute = (): void => {
+      const selection = window.getSelection()
+      if (selection === null || selection.isCollapsed) {
+        setLocal(null)
+        return
+      }
+      const text = selection.toString().trim()
+      if (text === '') {
+        setLocal(null)
+        return
+      }
+      const range = selection.getRangeAt(0)
+      const node = range.startContainer
+      const element = node.nodeType === 1 ? (node as Element) : node.parentElement
+      if (element !== null && element.closest('input, textarea, [contenteditable="true"]') !== null) {
+        setLocal(null)
+        return
+      }
+      if (element === null || element.closest('[data-sidechat-role="assistant"]') === null) {
+        setLocal(null)
+        return
+      }
+      const rect = range.getBoundingClientRect()
+      if (rect.width === 0 && rect.height === 0) {
+        setLocal(null)
+        return
+      }
+      setLocal({ text, x: rect.left + rect.width / 2, y: rect.top })
+    }
+    const onMouseUp = (): void => { window.setTimeout(compute, 0) }
+    document.addEventListener('mouseup', onMouseUp)
+    document.addEventListener('selectionchange', compute)
+    return () => {
+      document.removeEventListener('mouseup', onMouseUp)
+      document.removeEventListener('selectionchange', compute)
+    }
+  }, [])
+
+  if (local === null) return null
+  return (
+    <div className={css.selectionMenu} style={{ left: local.x, top: local.y - 46 }}>
+      <button
+        type="button"
+        className={css.selectionButton}
+        onClick={() => {
+          if (!props.bringToMain(local.text)) props.store.patch({ error: props.t('insert.failed') })
+          setLocal(null)
+        }}
+      >
+        {props.t('insert.bring')}
+      </button>
+    </div>
+  )
+}
+
 /** The side-chat panel body. */
-function SidechatPanel(props: { store: SidechatStore; t: (key: SidechatLocaleKey) => string; formatDuration: (ms: number) => string }) {
+function SidechatPanel(props: {
+  store: SidechatStore
+  t: (key: SidechatLocaleKey) => string
+  formatDuration: (ms: number) => string
+  bringToMain: (text: string) => boolean
+}) {
   const { panel } = useSyncExternalStore(props.store.subscribe, props.store.getSnapshot)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const codeLabels = useMemo(() => ({ copyLabel: props.t('panel.copy'), copiedLabel: props.t('panel.copied') }), [props.t])
@@ -1027,11 +1107,24 @@ function SidechatPanel(props: { store: SidechatStore; t: (key: SidechatLocaleKey
             )
           }
           return (
-            <div key={index} className={css.messageAssistant}>
+            <div key={index} className={css.messageAssistant} data-sidechat-role="assistant">
               {reasoningBlocks.map((block, rIndex) => (
                 <ReasoningRow key={rIndex} text={block.type === 'reasoning' ? block.text : ''} t={props.t} />
               ))}
               {text !== '' && <MarkdownText text={text} codeLabels={codeLabels} />}
+              {text !== '' && (
+                <div className={css.messageActions}>
+                  <button
+                    type="button"
+                    className={css.messageInsertButton}
+                    onClick={() => {
+                      if (!props.bringToMain(text)) props.store.patch({ error: props.t('insert.failed') })
+                    }}
+                  >
+                    {props.t('insert.whole')}
+                  </button>
+                </div>
+              )}
             </div>
           )
         })}
@@ -1200,6 +1293,24 @@ function SettingsSection(props: { store: SidechatStore; t: (key: SidechatLocaleK
 export function apply(ctx: Context): void {
   const store = createStore()
 
+  /** Append text to the current main conversation's composer draft (never sends). */
+  const bringToMain = (text: string): boolean => {
+    const trimmed = text.trim()
+    if (trimmed === '') return false
+    const sessionId = ctx.sessions.list.getSnapshot().current
+    if (sessionId === undefined) return false
+    try {
+      const actx = ctx.sessions.scope(sessionId)
+      if (actx === undefined) return false
+      const input = ctx.conversation.input.for(actx)
+      const draft = input.state.getSnapshot().draft
+      input.setDraft(draft === '' ? trimmed : `${draft}\n\n${trimmed}`)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   // Localized copy follows the DSH locale (module-level mirror for callbacks).
   let activeLocale = ctx.locale.getSnapshot().active
   ctx.effect(() => {
@@ -1264,7 +1375,8 @@ export function apply(ctx: Context): void {
     const formatDuration = (ms: number): string => formatRunDuration(ms, activeLocale)
     root.render(<>
       <SelectionMenu store={store} t={t} />
-      <SidechatPanel store={store} t={t} formatDuration={formatDuration} />
+      <BringBackMenu store={store} t={t} bringToMain={bringToMain} />
+      <SidechatPanel store={store} t={t} formatDuration={formatDuration} bringToMain={bringToMain} />
     </>)
 
     return () => {

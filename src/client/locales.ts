@@ -58,6 +58,9 @@ export const zh = {
   'settings.defaultPromptTitle': '默认用户提示词',
   'settings.defaultPromptDesc': '「立即发送」开启时，选中的内容会自动附加这段提示词，让回答更符合你的需求',
   'settings.defaultPromptPlaceholder': '例如：请用中文回答，并尽量简洁…',
+  'insert.bring': '带到主会话',
+  'insert.whole': '带回整段',
+  'insert.failed': '无法写入主会话输入框',
 }
 
 export const en = {
@@ -114,6 +117,9 @@ export const en = {
   'settings.defaultPromptTitle': 'Default prompt',
   'settings.defaultPromptDesc': 'When "send immediately" is on, this prompt is appended to the selection so the answer matches your needs',
   'settings.defaultPromptPlaceholder': 'e.g. Answer in Chinese and keep it concise…',
+  'insert.bring': 'Insert into main session',
+  'insert.whole': 'Insert whole reply',
+  'insert.failed': 'Could not write to the main composer',
 }
 
 export type SidechatLocaleKey = keyof typeof zh

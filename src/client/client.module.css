@@ -233,6 +233,29 @@
   color: var(--dsw-alias-label-primary);
 }
 
+/* Per-assistant-message "bring whole reply to main" action. */
+.messageActions {
+  display: flex;
+  margin-top: 6px;
+}
+
+.messageInsertButton {
+  font-family: var(--dsw-font-family);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 999px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.messageInsertButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
 /* Reasoning disclosure (main-conversation Think row) */
 .reasoningSummary {
   min-width: 0;
