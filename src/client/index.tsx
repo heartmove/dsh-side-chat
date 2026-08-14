@@ -1111,7 +1111,26 @@ function SidechatPanel(props: {
     return base64ObjectUrl(result.value.mediaType, result.value.data)
   }, [panel.activeChildId])
 
-  if (!panel.open) return null
+  if (!panel.open) {
+    // Panel closed but the main conversation has a pending question dialog:
+    // show a marked floating entry instead of forcing the panel open.
+    if (mainQuestion !== null) {
+      return (
+        <Tooltip label={props.t('question.openHint')} side="top">
+          <button
+            type="button"
+            className={css.questionFab}
+            aria-label={props.t('question.openHint')}
+            onClick={() => { props.store.openPanel(panel.parentSessionId) }}
+          >
+            <IconPanelLeftOutline16 size={16} />
+            <span className={css.questionFabDot} />
+          </button>
+        </Tooltip>
+      )
+    }
+    return null
+  }
 
   if (collapsed) {
     return (
@@ -1625,9 +1644,6 @@ export function apply(ctx: Context): void {
         lastQuestion = question
         const questions = question !== undefined && question.kind === 'question' ? (question.payload.questions ?? null) : null
         store.setMainQuestion(questions === null ? null : [...questions])
-        // Open the side panel so the option list is visible even when the user
-        // has no side chat yet (bringing an item auto-creates one).
-        if (questions !== null) store.openPanel(sessionId)
       }
       read()
       unsub = binding.session.subscribe(read)

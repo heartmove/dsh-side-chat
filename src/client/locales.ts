@@ -79,6 +79,7 @@ export const zh = {
   'question.failed': '带入侧边聊天失败',
   'question.allPrompt': '请帮我理解上面的问题和各个选项的含义，并给出选择建议。',
   'question.onePrompt': '请帮我理解这个选项的含义，以及它在这个问题中的利弊。',
+  'question.openHint': '主会话有一个问题弹框，点击在侧边聊天里询问',
 }
 
 export const en = {
@@ -156,6 +157,7 @@ export const en = {
   'question.failed': 'Failed to bring into the side chat',
   'question.allPrompt': 'Please explain what this question is asking and what each option means, and advise how I should choose.',
   'question.onePrompt': 'Please explain what this option means and its trade-offs for this question.',
+  'question.openHint': 'The main conversation has a question dialog — click to ask in the side chat',
 }
 
 export type SidechatLocaleKey = keyof typeof zh

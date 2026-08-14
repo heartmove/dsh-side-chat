@@ -145,6 +145,40 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/* Floating entry shown (panel closed) when the main conversation has a question dialog. */
+.questionFab {
+  position: fixed;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  z-index: 2147482990;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-bg-overlay);
+  border: 1px solid var(--dsw-alias-state-business-primary);
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: var(--dsw-shadow-lv2);
+}
+
+.questionFab:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.questionFabDot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dsw-alias-state-business-primary);
+}
+
 /* Pending main-conversation question dialog, listed item-by-item. */
 .questionBlock {
   flex: none;
