@@ -1,0 +1,11 @@
+{
+  "//": "Declaration build for the shipped types surface: emits lib/types/*.d.ts from src.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "outDir": "lib/types"
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,16 @@
+/**
+ * Layout push: when the side-chat panel is open it OCCUPIES layout instead of
+ * floating over it — the app shell (#root) gives up the right margin so the
+ * center column (conversation + input bar) squeezes left, like a VSCode
+ * sidebar. The width rides a CSS variable the panel sets.
+ */
+#root {
+  margin-right: var(--dsh-subchat-width, 0px);
+  transition: margin-right var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #root {
+    transition: none;
+  }
+}
