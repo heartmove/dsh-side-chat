@@ -2,7 +2,9 @@
 
 A [DSH](https://www.deepseek.com) web plugin that lets you select part of a
 conversation and ask about it in a **side chat** — a dedicated chat opened in a
-right-side panel, scoped to the conversation it was started from.
+right-side panel, scoped to the conversation it was started from. Side-chat AI
+replies can also be **brought back to the main conversation** (directly or as a
+summary, into the composer draft or as a collapsed context row).
 
 > 中文文档见 [README.zh.md](./README.zh.md).
 
