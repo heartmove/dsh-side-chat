@@ -37,11 +37,6 @@ summary, into the composer draft or as a collapsed context row).
   side chat's inherited model summarizes it first). Where it lands is
   configurable: **into the composer draft**, or **as a collapsed context row**
   (injected as context — not into the composer, never sent).
-- **Ask about the current question dialog.** When the main conversation shows a
-  question dialog (the agent asking you something), a **"Ask about this dialog
-  in the side chat"** button appears at the top of the side panel, carrying the
-  question and its options into the side chat so the AI can explain it and
-  suggest how to answer.
 - **Resizable, collapsible panel.** Drag to resize (280–720 px), collapse and
   expand; no close button.
 - **Language-aware.** The plugin follows DSH's language setting (Chinese /

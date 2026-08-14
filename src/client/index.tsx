@@ -28,7 +28,7 @@ import {
   ImageLightbox,
   type ImageLoader,
 } from '@deepseek-ai/dsh-client-ui-attachment'
-import type { Context, SideQuestionItem } from '../context-types.ts'
+import type { Context } from '../context-types.ts'
 import {
   api,
   type PromptContentPart,
@@ -86,8 +86,6 @@ interface SidechatSnapshot {
   panel: PanelState
   anchor: SelectionAnchor | null
   prefs: SubchatPrefs
-  /** The current main conversation's pending user-question dialog (null = none). */
-  mainQuestion: SideQuestionItem[] | null
 }
 
 /** The whole browser-side store (one per activation). */
@@ -97,7 +95,6 @@ interface SidechatStore {
   setCurrent(current: string | undefined): void
   setAnchor(anchor: SelectionAnchor | null): void
   setPrefs(prefs: SubchatPrefs): void
-  setMainQuestion(questions: SideQuestionItem[] | null): void
   openPanel(parentSessionId: string): void
   closePanel(): void
   setActive(childId: string): void
@@ -135,7 +132,6 @@ function createStore(): SidechatStore {
   let panel: PanelState = emptyPanel()
   let anchor: SelectionAnchor | null = null
   let prefs: SubchatPrefs = { ...SUBCHAT_PREFS_DEFAULTS }
-  let mainQuestion: SideQuestionItem[] | null = null
   // Per-conversation panel state so switching away and back restores the side
   // chats instead of resetting them. The side chats stay live on the host, so
   // the client must remember each conversation's open panel + active child.
@@ -143,10 +139,10 @@ function createStore(): SidechatStore {
   const listeners = new Set<() => void>()
   // Cached snapshot: useSyncExternalStore compares identity, so the object is
   // only rebuilt on a mutation — never inside getSnapshot itself.
-  let snapshot: SidechatSnapshot = { current, panel, anchor, prefs, mainQuestion }
+  let snapshot: SidechatSnapshot = { current, panel, anchor, prefs }
 
   const notify = (): void => {
-    snapshot = { current, panel, anchor, prefs, mainQuestion }
+    snapshot = { current, panel, anchor, prefs }
     for (const fn of [...listeners]) fn()
   }
 
@@ -164,7 +160,6 @@ function createStore(): SidechatStore {
         ? emptyPanel()
         : (bySession.get(next) ?? { ...emptyPanel(), parentSessionId: next, lookup: prefs.lookupDefault })
       anchor = null
-      mainQuestion = null
       notify()
     },
     setAnchor(next) {
@@ -173,10 +168,6 @@ function createStore(): SidechatStore {
     },
     setPrefs(next) {
       prefs = next
-      notify()
-    },
-    setMainQuestion(questions) {
-      mainQuestion = questions
       notify()
     },
     openPanel(parentSessionId) {
@@ -787,9 +778,8 @@ function SidechatPanel(props: {
   formatDuration: (ms: number) => string
   bringToMain: (text: string) => Promise<boolean>
   summarizeBring: (text: string) => Promise<boolean>
-  askMainQuestion: () => Promise<boolean>
 }) {
-  const { panel, mainQuestion } = useSyncExternalStore(props.store.subscribe, props.store.getSnapshot)
+  const { panel } = useSyncExternalStore(props.store.subscribe, props.store.getSnapshot)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const codeLabels = useMemo(() => ({ copyLabel: props.t('panel.copy'), copiedLabel: props.t('panel.copied') }), [props.t])
   const attachmentRailLabels = useMemo(() => ({
@@ -818,8 +808,6 @@ function SidechatPanel(props: {
   const [limits, setLimits] = useState<{ mediaTypes: string[]; maxImageBytes: number; maxImagesPerMessage: number; maxMessageImageBytes: number } | null>(null)
   /** Index of the assistant message whose "summarize then insert" is in flight. */
   const [summarizingIndex, setSummarizingIndex] = useState<number | null>(null)
-  /** Whether the "ask about the current dialog" request is in flight. */
-  const [askingQuestion, setAskingQuestion] = useState(false)
 
   const activeItem = panel.items.find((i) => i.childId === panel.activeChildId)
   const activeRunning = activeItem?.running ?? false
@@ -1103,23 +1091,6 @@ function SidechatPanel(props: {
           </Tooltip>
         </div>
       </div>
-
-      {mainQuestion !== null && (
-        <div className={css.panelQuestionBar}>
-          <span className={css.panelQuestionText}>{props.t('panel.questionHint')}</span>
-          <button
-            type="button"
-            className={css.panelQuestionButton}
-            disabled={askingQuestion}
-            onClick={() => {
-              setAskingQuestion(true)
-              void props.askMainQuestion().then(() => { setAskingQuestion(false) })
-            }}
-          >
-            {askingQuestion ? props.t('panel.questionAsking') : props.t('panel.questionAsk')}
-          </button>
-        </div>
-      )}
 
       <div className={css.panelList}>
         {panel.items.length === 0
@@ -1452,65 +1423,6 @@ export function apply(ctx: Context): void {
     return landText(result.value.summary, 'insert.summarizeContextSummary')
   }
 
-  /** Ask the main conversation's pending question dialog in the side chat. */
-  const askMainQuestion = async (): Promise<boolean> => {
-    const questions = store.getSnapshot().mainQuestion
-    if (questions === null) return false
-    const parentSessionId = ctx.sessions.list.getSnapshot().current
-    if (parentSessionId === undefined) return false
-
-    const lines: string[] = []
-    for (const q of questions) {
-      if (q.header !== undefined && q.header !== '') lines.push(`【${q.header}】`)
-      lines.push(q.question)
-      if (q.detail !== undefined && q.detail !== '') lines.push(q.detail)
-      if (q.options !== undefined && q.options.length > 0) {
-        lines.push(activeLocale === 'en' ? 'Options:' : '可选选项：')
-        for (const o of q.options) {
-          lines.push(`- ${o.label}${o.description !== undefined && o.description !== '' ? ` — ${o.description}` : ''}`)
-        }
-      }
-    }
-    const ask = activeLocale === 'en'
-      ? '\n\nPlease explain what this question is asking and what each option means, and advise how I should choose.'
-      : '\n\n请帮我理解上面的问题和各个选项的含义，并给出我该如何选择的建议。'
-    const text = lines.join('\n') + ask
-
-    const panel = store.getSnapshot().panel
-    const content: PromptContentPart[] = [{ type: 'text', text }]
-
-    if (panel.activeChildId === null) {
-      const result = await api.start({
-        parentSessionId,
-        content,
-        lookupEnabled: panel.lookup,
-        ...(panel.provider !== '' ? { provider: panel.provider } : {}),
-        ...(panel.model !== '' ? { model: panel.model } : {}),
-        ...(panel.effort !== '' ? { reasoningEffort: panel.effort } : {}),
-      })
-      if (result.ok) {
-        store.openPanel(parentSessionId)
-        store.setActive(result.value.childId)
-        store.patch({ provider: result.value.provider, model: result.value.model, effort: result.value.reasoningEffort ?? '' })
-        void refreshList(store, parentSessionId)
-        void refreshDirectory(store)
-        return true
-      }
-      return false
-    }
-
-    const childId = panel.activeChildId
-    setItemRunning(store, childId, true)
-    const result = await api.followup({ childId, content, lookupEnabled: panel.lookup })
-    if (!result.ok) {
-      setItemRunning(store, childId, false)
-      store.patch({ error: result.error.message })
-    }
-    void refreshList(store, parentSessionId)
-    void refreshHistory(store, childId)
-    return result.ok
-  }
-
   ctx.effect(() => {
     const offZh = ctx.locale.register(LOCALE_NS, 'zh', zh)
     const offEn = ctx.locale.register(LOCALE_NS, 'en', en)
@@ -1553,42 +1465,6 @@ export function apply(ctx: Context): void {
     return ctx.sessions.list.subscribe(sync)
   }, 'dsh-side-chat: follow current conversation')
 
-  // Track the main conversation's pending user-question dialog (the "ask about
-  // this dialog in the side chat" entry). Only re-publishes when the question
-  // object identity changes, so busy conversation snapshots stay cheap.
-  ctx.effect(() => {
-    let unsub: (() => void) | undefined
-    let lastQuestion: unknown = undefined
-    const follow = (): void => {
-      unsub?.()
-      unsub = undefined
-      lastQuestion = undefined
-      const sessionId = ctx.sessions.list.getSnapshot().current
-      if (sessionId === undefined) {
-        store.setMainQuestion(null)
-        return
-      }
-      const binding = ctx.sessions.binding(sessionId)
-      if (binding === undefined) {
-        store.setMainQuestion(null)
-        return
-      }
-      const read = (): void => {
-        const pending = binding.session.getSnapshot().pending
-        const question = pending.find((p) => p.kind === 'question')
-        if (question === lastQuestion) return
-        lastQuestion = question
-        const questions = question !== undefined && question.kind === 'question' ? (question.payload.questions ?? null) : null
-        store.setMainQuestion(questions === null ? null : [...questions])
-      }
-      read()
-      unsub = binding.session.subscribe(read)
-    }
-    follow()
-    const offList = ctx.sessions.list.subscribe(follow)
-    return () => { offList(); unsub?.() }
-  }, 'dsh-side-chat: track main question dialog')
-
   // The "Side chat" settings section.
   const settingsT = (key: SidechatLocaleKey): string => translate(activeLocale, key)
   ctx.slots.inject('settings.section', () => ctx.slots.register({
@@ -1611,7 +1487,7 @@ export function apply(ctx: Context): void {
     root.render(<>
       <SelectionMenu store={store} t={t} />
       <BringBackMenu store={store} t={t} bringToMain={bringToMain} summarizeBring={summarizeBring} />
-      <SidechatPanel store={store} t={t} formatDuration={formatDuration} bringToMain={bringToMain} summarizeBring={summarizeBring} askMainQuestion={askMainQuestion} />
+      <SidechatPanel store={store} t={t} formatDuration={formatDuration} bringToMain={bringToMain} summarizeBring={summarizeBring} />
     </>)
 
     return () => {

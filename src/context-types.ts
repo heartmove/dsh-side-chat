@@ -73,45 +73,7 @@ export interface SideSessionList {
   byId: Record<string, SideSessionSummary>
 }
 
-/** One selectable answer in a user-question dialog. */
-export interface SideQuestionOption {
-  label: string
-  description?: string
-}
-
-/** One question in a pending user-question dialog. */
-export interface SideQuestionItem {
-  id: string
-  question: string
-  detail?: string
-  header?: string
-  options?: SideQuestionOption[]
-  multiSelect?: boolean
-}
-
-/** A pending main-conversation interaction (question / approval dialog). */
-export interface SidePendingInteraction {
-  kind: 'approval' | 'question'
-  key: string
-  sessionId: string
-  payload: { questions?: SideQuestionItem[] } & Record<string, unknown>
-}
-
-/** The slice of the main session snapshot this plugin reads (pending interactions). */
-export interface SideSessionSnapshot {
-  pending: readonly SidePendingInteraction[]
-}
-
-/** The main-session binding face (id + conversation-snapshot observable). */
-export interface SideSessionBinding {
-  sessionId: string
-  session: {
-    getSnapshot(): SideSessionSnapshot
-    subscribe(fn: () => void): () => void
-  }
-}
-
-/** The client sessions service face (list feed + scope/binding resolution). */
+/** The client sessions service face (list feed + scope resolution). */
 export interface SideSessionsService {
   list: {
     getSnapshot(): SideSessionList
@@ -119,8 +81,6 @@ export interface SideSessionsService {
   }
   /** Resolve an Agent-scoped context view for a listed session id (use-and-discard). */
   scope(id: string): Context | undefined
-  /** Resolve the stable session binding (id + conversation snapshot observable). */
-  binding(id: string): SideSessionBinding | undefined
 }
 
 /** Agent options (provider/model/maxTokens). */
