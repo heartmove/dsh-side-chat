@@ -22,6 +22,9 @@
     "node": ">=20"
   },
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-runtime",
@@ -37,6 +40,7 @@
     "lib/client.js",
     "lib/client-registry.js",
     "lib/types/**/*.d.ts",
+    "cordis.patch.yml",
     "src"
   ],
   "scripts": {

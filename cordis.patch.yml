@@ -1,0 +1,8 @@
+# Bundle patch layer for dsh-side-chat. This file is referenced by the
+# package.json `dsh.bundle.patch` declaration, so `dsh plugin add` reconciles
+# this package into the profile's bundle list and this row mounts the plugin.
+# `name` is the package name: the Loader resolves it from the profile's
+# node_modules (where pnpm installs the checkout / git dependency).
+- insert:
+    - id: dsh-side-chat
+      name: dsh-side-chat

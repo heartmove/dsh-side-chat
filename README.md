@@ -52,43 +52,71 @@ declarations, then bundles the host (`lib/index.js`) and client
 
 ## Deploy
 
-DSH web loads external plugins from the active profile. Mount this plugin into
-your web profile (usually `~/.dsh/profiles/web/`):
+DSH web loads external plugins from the active profile. This package is a
+**bundle**: its `package.json` declares `dsh.bundle.patch` →
+[`cordis.patch.yml`](./cordis.patch.yml), whose `insert` row mounts the plugin.
+That declaration is what lets `dsh plugin add` install the package *and*
+activate it in one step.
 
-1. **Link the package.** In `~/.dsh/profiles/web/package.json`, add the plugin
-   as a `link:` dependency pointing at this checkout:
+### Install from GitHub
 
-   ```json
-   {
-     "dependencies": {
-       "dsh-side-chat": "link:D:\\path\\to\\dsh-side-chat"
-     }
-   }
-   ```
+```bash
+npx -p @deepseek-ai/dsh dsh plugin --profile web add github:heartmove/dsh-side-chat
+```
 
-   (On POSIX systems use `link:/path/to/dsh-side-chat`.)
+`dsh plugin` forwards to pnpm inside `~/.dsh/profiles/web/`, then reconciles the
+bundle into the profile's `dsh.profile.bundles` layer list. A git install
+fetches sources, so pnpm runs the package's `prepare` script (`tsdown`) to build
+`lib/` from `src/` after checkout.
 
-2. **Insert the loader row.** In `~/.dsh/profiles/web/cordis.patch.yml`, add an
-   `insert` entry:
+pnpm ≥ 10 refuses to run a git dependency's `prepare` script until it is
+allowlisted, so the first `add` fails with an "Ignored build scripts" hint. Copy
+the exact package key pnpm printed into the profile's `pnpm-workspace.yaml`
+(`~/.dsh/profiles/web/pnpm-workspace.yaml`):
 
-   ```yaml
-   - insert:
-       - id: dsh-side-chat
-         name: 'dsh-side-chat'
-   ```
+```yaml
+allowBuilds:
+  dsh-side-chat: true
+```
 
-   `name` must match the dependency name above; the loader resolves it to the
-   linked package and reads its `dsh.plugin.json`
-   (`dsh-external/dsh-side-chat`).
+then re-run the `add`. That allowance means "run this package's code on my
+machine at install time" — only allow packages whose source you trust, and pin a
+commit (`github:heartmove/dsh-side-chat#<sha>`) so a later push cannot silently
+change what runs.
 
-3. **Install and restart.**
+Restart `dsh web`, then hard-refresh the page (Ctrl/Cmd+Shift+R).
 
-   ```bash
-   cd ~/.dsh/profiles/web
-   pnpm install
-   ```
+### Install from a local checkout
 
-   Restart `dsh web`, then hard-refresh the page (Ctrl/Cmd+Shift+R).
+From the directory that contains this checkout:
+
+```bash
+npx -p @deepseek-ai/dsh dsh plugin --profile web add ./dsh-side-chat
+```
+
+pnpm links the checkout and `dsh` activates the bundle the same way.
+
+### Manual link
+
+To manage the profile by hand, link the package and list it as a bundle in
+`~/.dsh/profiles/web/package.json` (the bundle's own `cordis.patch.yml` supplies
+the loader row, so no `insert` entry is needed):
+
+```json
+{
+  "dependencies": {
+    "dsh-side-chat": "link:D:\\path\\to\\dsh-side-chat"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dsh-side-chat"]
+    }
+  }
+}
+```
+
+(On POSIX systems use `link:/path/to/dsh-side-chat`.) Then run `pnpm install`
+in the profile directory and restart `dsh web`.
 
 ## Usage
 
@@ -138,6 +166,7 @@ src/
     locales.ts        zh/en dictionaries
     client.module.css panel/composer/settings styles
     layout.css        #root margin-right driven by panel width
+cordis.patch.yml      bundle patch layer (inserts the loader row; dsh.bundle.patch)
 dsh.plugin.json       external plugin manifest
 tsdown.config.ts      bundle config (client externals + CSS inlining)
 ```

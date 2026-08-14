@@ -42,42 +42,68 @@ pnpm build
 
 ## 部署
 
-DSH web 从当前 profile 加载外部插件。把本插件挂载到你的 web profile
-（通常位于 `~/.dsh/profiles/web/`）：
+DSH web 从当前 profile 加载外部插件。本包是一个 **bundle**：它的
+`package.json` 声明了 `dsh.bundle.patch` → [`cordis.patch.yml`](./cordis.patch.yml)，
+其中的 `insert` 条目用于挂载插件。正是这个声明让 `dsh plugin add` 能一步完成
+「安装 + 激活」。
 
-1. **链接包。** 在 `~/.dsh/profiles/web/package.json` 里，把插件作为 `link:` 依赖
-   指向本项目目录：
+### 从 GitHub 安装
 
-   ```json
-   {
-     "dependencies": {
-       "dsh-side-chat": "link:D:\\path\\to\\dsh-side-chat"
-     }
-   }
-   ```
+```bash
+npx -p @deepseek-ai/dsh dsh plugin --profile web add github:heartmove/dsh-side-chat
+```
 
-   （在 POSIX 系统上使用 `link:/path/to/dsh-side-chat`。）
+`dsh plugin` 会把命令转发到 `~/.dsh/profiles/web/` 下的 pnpm，然后把 bundle
+对账进该 profile 的 `dsh.profile.bundles` 层列表。git 安装拉取的是源码，因此
+pnpm 会在 checkout 之后运行包的 `prepare` 脚本（`tsdown`），从 `src/` 构建出
+`lib/`。
 
-2. **插入加载器条目。** 在 `~/.dsh/profiles/web/cordis.patch.yml` 里添加一个
-   `insert` 条目：
+pnpm ≥ 10 在把 git 依赖加入白名单之前，会拒绝运行它的 `prepare` 脚本，因此首次
+`add` 会失败并给出「Ignored build scripts」提示。把 pnpm 打印的确切包名键复制到
+该 profile 的 `pnpm-workspace.yaml`（`~/.dsh/profiles/web/pnpm-workspace.yaml`）：
 
-   ```yaml
-   - insert:
-       - id: dsh-side-chat
-         name: 'dsh-side-chat'
-   ```
+```yaml
+allowBuilds:
+  dsh-side-chat: true
+```
 
-   其中 `name` 必须与上面的依赖名一致；加载器会据此解析到链接的包，并读取其
-   `dsh.plugin.json`（插件 id 为 `dsh-external/dsh-side-chat`）。
+然后重新执行 `add`。这个白名单意味着「允许该包的代码在安装时于本机运行」——
+只放行你信任其源码的包，并固定到某个 commit
+（`github:heartmove/dsh-side-chat#<sha>`），这样之后的推送无法悄悄改变实际运行的代码。
 
-3. **安装并重启。**
+重启 `dsh web`，然后在浏览器中强制刷新页面（Ctrl/Cmd+Shift+R）。
 
-   ```bash
-   cd ~/.dsh/profiles/web
-   pnpm install
-   ```
+### 从本地 checkout 安装
 
-   重启 `dsh web`，然后在浏览器中强制刷新页面（Ctrl/Cmd+Shift+R）。
+在包含本项目 checkout 的目录下执行：
+
+```bash
+npx -p @deepseek-ai/dsh dsh plugin --profile web add ./dsh-side-chat
+```
+
+pnpm 会链接该 checkout，`dsh` 以同样方式激活这个 bundle。
+
+### 手动链接
+
+如果你想手动管理 profile，可在 `~/.dsh/profiles/web/package.json` 里链接该包并
+把它列为 bundle（bundle 自带的 `cordis.patch.yml` 已提供加载器条目，因此无需再
+写 `insert`）：
+
+```json
+{
+  "dependencies": {
+    "dsh-side-chat": "link:D:\\path\\to\\dsh-side-chat"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dsh-side-chat"]
+    }
+  }
+}
+```
+
+（在 POSIX 系统上使用 `link:/path/to/dsh-side-chat`。）然后在 profile 目录执行
+`pnpm install` 并重启 `dsh web`。
 
 ## 使用
 
@@ -123,6 +149,7 @@ src/
     locales.ts        中英文词典
     client.module.css 面板/输入框/设置样式
     layout.css        由面板宽度驱动的 #root margin-right
+cordis.patch.yml      bundle patch 层（插入加载器条目；dsh.bundle.patch 指向它）
 dsh.plugin.json       外部插件清单
 tsdown.config.ts      打包配置（client 外部依赖 + CSS 内联）
 ```
