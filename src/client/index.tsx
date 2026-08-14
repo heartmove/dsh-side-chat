@@ -183,7 +183,8 @@ function createStore(): SidechatStore {
     },
     setMainQuestion(questions) {
       mainQuestion = questions
-      dismissedQuestionIds = []
+      // Keep dismissal state: a dismissed question must not reappear just
+      // because the pending snapshot re-publishes while the dialog is still open.
       notify()
     },
     dismissQuestion(id) {
@@ -900,6 +901,8 @@ function SidechatPanel(props: {
   const [summarizingIndex, setSummarizingIndex] = useState<number | null>(null)
   /** Which question-dialog item is being brought into the side chat ('all' or an option label). */
   const [bringingKey, setBringingKey] = useState<string | null>(null)
+  /** Whether the question-dialog list is collapsed (headers only). */
+  const [questionCollapsed, setQuestionCollapsed] = useState(false)
 
   /** Assemble one question + all its options into a prompt. */
   const buildAllText = (q: SideQuestionItem): string => {
@@ -1256,6 +1259,13 @@ function SidechatPanel(props: {
             <div className={css.questionBlockActions}>
               <button
                 type="button"
+                className={css.questionToggle}
+                onClick={() => { setQuestionCollapsed(!questionCollapsed) }}
+              >
+                {questionCollapsed ? props.t('question.expand') : props.t('question.collapse')}
+              </button>
+              <button
+                type="button"
                 className={css.questionDeleteAll}
                 onClick={() => { props.store.dismissAllQuestions(visible.map((q) => q.id)) }}
               >
@@ -1263,6 +1273,13 @@ function SidechatPanel(props: {
               </button>
             </div>
             {visible.map((q) => {
+              if (questionCollapsed) {
+                return (
+                  <div key={q.id} className={`${css.questionItem} ${css.questionItemCollapsed}`}>
+                    <span className={css.questionHeaderText}>{q.header ?? q.question}</span>
+                  </div>
+                )
+              }
               const options = q.options ?? []
               return (
                 <div key={q.id} className={css.questionItem}>

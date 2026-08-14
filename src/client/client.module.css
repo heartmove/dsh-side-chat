@@ -190,7 +190,25 @@
 
 .questionBlockActions {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.questionToggle {
+  font-family: var(--dsw-font-family);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.questionToggle:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 .questionDeleteAll {
@@ -208,6 +226,11 @@
 .questionDeleteAll:hover {
   color: var(--dsw-alias-state-error-primary);
   background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.questionItemCollapsed {
+  gap: 0;
+  padding: 8px 12px;
 }
 
 .questionItem {
