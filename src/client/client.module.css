@@ -188,6 +188,28 @@
   border-bottom: 1px solid var(--dsw-alias-border-l1);
 }
 
+.questionBlockActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.questionDeleteAll {
+  font-family: var(--dsw-font-family);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.questionDeleteAll:hover {
+  color: var(--dsw-alias-state-error-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
 .questionItem {
   display: flex;
   flex-direction: column;
@@ -215,6 +237,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.questionHeaderActions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .questionBody {
@@ -282,6 +311,26 @@
 .questionBringButton:disabled {
   cursor: default;
   opacity: 0.55;
+}
+
+.questionDelete {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.questionDelete:hover {
+  color: var(--dsw-alias-state-error-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 /* ---- Side-chat list ---- */

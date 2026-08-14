@@ -88,6 +88,8 @@ interface SidechatSnapshot {
   prefs: SubchatPrefs
   /** The current main conversation's pending user-question dialog (null = none). */
   mainQuestion: SideQuestionItem[] | null
+  /** Question ids the user deleted from the panel list. */
+  dismissedQuestionIds: string[]
 }
 
 /** The whole browser-side store (one per activation). */
@@ -98,6 +100,8 @@ interface SidechatStore {
   setAnchor(anchor: SelectionAnchor | null): void
   setPrefs(prefs: SubchatPrefs): void
   setMainQuestion(questions: SideQuestionItem[] | null): void
+  dismissQuestion(id: string): void
+  dismissAllQuestions(ids: string[]): void
   openPanel(parentSessionId: string): void
   closePanel(): void
   setActive(childId: string): void
@@ -136,6 +140,7 @@ function createStore(): SidechatStore {
   let anchor: SelectionAnchor | null = null
   let prefs: SubchatPrefs = { ...SUBCHAT_PREFS_DEFAULTS }
   let mainQuestion: SideQuestionItem[] | null = null
+  let dismissedQuestionIds: string[] = []
   // Per-conversation panel state so switching away and back restores the side
   // chats instead of resetting them. The side chats stay live on the host, so
   // the client must remember each conversation's open panel + active child.
@@ -143,10 +148,10 @@ function createStore(): SidechatStore {
   const listeners = new Set<() => void>()
   // Cached snapshot: useSyncExternalStore compares identity, so the object is
   // only rebuilt on a mutation — never inside getSnapshot itself.
-  let snapshot: SidechatSnapshot = { current, panel, anchor, prefs, mainQuestion }
+  let snapshot: SidechatSnapshot = { current, panel, anchor, prefs, mainQuestion, dismissedQuestionIds }
 
   const notify = (): void => {
-    snapshot = { current, panel, anchor, prefs, mainQuestion }
+    snapshot = { current, panel, anchor, prefs, mainQuestion, dismissedQuestionIds }
     for (const fn of [...listeners]) fn()
   }
 
@@ -165,6 +170,7 @@ function createStore(): SidechatStore {
         : (bySession.get(next) ?? { ...emptyPanel(), parentSessionId: next, lookup: prefs.lookupDefault })
       anchor = null
       mainQuestion = null
+      dismissedQuestionIds = []
       notify()
     },
     setAnchor(next) {
@@ -177,6 +183,17 @@ function createStore(): SidechatStore {
     },
     setMainQuestion(questions) {
       mainQuestion = questions
+      dismissedQuestionIds = []
+      notify()
+    },
+    dismissQuestion(id) {
+      if (!dismissedQuestionIds.includes(id)) {
+        dismissedQuestionIds = [...dismissedQuestionIds, id]
+        notify()
+      }
+    },
+    dismissAllQuestions(ids) {
+      dismissedQuestionIds = [...new Set([...dismissedQuestionIds, ...ids])]
       notify()
     },
     openPanel(parentSessionId) {
@@ -850,8 +867,9 @@ function SidechatPanel(props: {
   bringToMain: (text: string) => Promise<boolean>
   summarizeBring: (text: string) => Promise<boolean>
   askSidechat: (text: string) => Promise<boolean>
+  askSidechatNew: (text: string) => Promise<boolean>
 }) {
-  const { panel, mainQuestion } = useSyncExternalStore(props.store.subscribe, props.store.getSnapshot)
+  const { panel, mainQuestion, dismissedQuestionIds } = useSyncExternalStore(props.store.subscribe, props.store.getSnapshot)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const codeLabels = useMemo(() => ({ copyLabel: props.t('panel.copy'), copiedLabel: props.t('panel.copied') }), [props.t])
   const attachmentRailLabels = useMemo(() => ({
@@ -911,9 +929,10 @@ function SidechatPanel(props: {
     return lines.join('\n')
   }
 
-  const bringQuestionText = (text: string, key: string): void => {
+  const bringQuestionText = (text: string, key: string, useNew: boolean): void => {
     setBringingKey(key)
-    void props.askSidechat(text).then((ok) => {
+    const fn = useNew ? props.askSidechatNew : props.askSidechat
+    void fn(text).then((ok) => {
       setBringingKey(null)
       if (!ok) props.store.patch({ error: props.t('question.failed') })
     })
@@ -1229,49 +1248,89 @@ function SidechatPanel(props: {
         </div>
       </div>
 
-      {mainQuestion !== null && (
-        <div className={css.questionBlock}>
-          {mainQuestion.map((q) => {
-            const options = q.options ?? []
-            return (
-              <div key={q.id} className={css.questionItem}>
-                <div className={css.questionHeader}>
-                  <span className={css.questionHeaderText}>{q.header ?? q.question}</span>
-                  <button
-                    type="button"
-                    className={css.questionBringButton}
-                    disabled={bringingKey !== null}
-                    onClick={() => { bringQuestionText(buildAllText(q), `all:${q.id}`) }}
-                  >
-                    {bringingKey === `all:${q.id}` ? props.t('question.bringing') : props.t('question.bringAll')}
-                  </button>
-                </div>
-                <div className={css.questionBody}>{q.question}</div>
-                {q.detail !== undefined && q.detail !== '' && <div className={css.questionDetail}>{q.detail}</div>}
-                {options.map((o) => {
-                  const key = `${q.id}:${o.label}`
-                  return (
-                    <div key={o.label} className={css.questionOption}>
-                      <span className={css.questionOptionText}>
-                        <span className={css.questionOptionLabel}>{o.label}</span>
-                        {o.description !== undefined && o.description !== '' && <span className={css.questionOptionDesc}> — {o.description}</span>}
-                      </span>
+      {mainQuestion !== null && (() => {
+        const visible = mainQuestion.filter((q) => !dismissedQuestionIds.includes(q.id))
+        if (visible.length === 0) return null
+        return (
+          <div className={css.questionBlock}>
+            <div className={css.questionBlockActions}>
+              <button
+                type="button"
+                className={css.questionDeleteAll}
+                onClick={() => { props.store.dismissAllQuestions(visible.map((q) => q.id)) }}
+              >
+                {props.t('question.deleteAll')}
+              </button>
+            </div>
+            {visible.map((q) => {
+              const options = q.options ?? []
+              return (
+                <div key={q.id} className={css.questionItem}>
+                  <div className={css.questionHeader}>
+                    <span className={css.questionHeaderText}>{q.header ?? q.question}</span>
+                    <div className={css.questionHeaderActions}>
                       <button
                         type="button"
                         className={css.questionBringButton}
                         disabled={bringingKey !== null}
-                        onClick={() => { bringQuestionText(buildOneText(q, o), key) }}
+                        onClick={() => { bringQuestionText(buildAllText(q), `newall:${q.id}`, true) }}
                       >
-                        {bringingKey === key ? props.t('question.bringing') : props.t('question.bringOne')}
+                        {bringingKey === `newall:${q.id}` ? props.t('question.bringing') : props.t('question.bringAllNew')}
+                      </button>
+                      <button
+                        type="button"
+                        className={css.questionBringButton}
+                        disabled={bringingKey !== null}
+                        onClick={() => { bringQuestionText(buildAllText(q), `all:${q.id}`, false) }}
+                      >
+                        {bringingKey === `all:${q.id}` ? props.t('question.bringing') : props.t('question.bringAll')}
+                      </button>
+                      <button
+                        type="button"
+                        className={css.questionDelete}
+                        aria-label={props.t('question.delete')}
+                        title={props.t('question.delete')}
+                        onClick={() => { props.store.dismissQuestion(q.id) }}
+                      >
+                        ×
                       </button>
                     </div>
-                  )
-                })}
-              </div>
-            )
-          })}
-        </div>
-      )}
+                  </div>
+                  <div className={css.questionBody}>{q.question}</div>
+                  {q.detail !== undefined && q.detail !== '' && <div className={css.questionDetail}>{q.detail}</div>}
+                  {options.map((o) => {
+                    const key = `${q.id}:${o.label}`
+                    return (
+                      <div key={o.label} className={css.questionOption}>
+                        <span className={css.questionOptionText}>
+                          <span className={css.questionOptionLabel}>{o.label}</span>
+                          {o.description !== undefined && o.description !== '' && <span className={css.questionOptionDesc}> — {o.description}</span>}
+                        </span>
+                        <button
+                          type="button"
+                          className={css.questionBringButton}
+                          disabled={bringingKey !== null}
+                          onClick={() => { bringQuestionText(buildOneText(q, o), `new:${key}`, true) }}
+                        >
+                          {bringingKey === `new:${key}` ? props.t('question.bringing') : props.t('question.bringOneNew')}
+                        </button>
+                        <button
+                          type="button"
+                          className={css.questionBringButton}
+                          disabled={bringingKey !== null}
+                          onClick={() => { bringQuestionText(buildOneText(q, o), key, false) }}
+                        >
+                          {bringingKey === key ? props.t('question.bringing') : props.t('question.bringOne')}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
 
       <div className={css.panelList}>
         {panel.items.length === 0
@@ -1669,6 +1728,33 @@ export function apply(ctx: Context): void {
     return result.ok
   }
 
+  /** Ask a piece of text in a brand-new side chat (never reuses an existing one). */
+  const askSidechatNew = async (text: string): Promise<boolean> => {
+    const trimmed = text.trim()
+    if (trimmed === '') return false
+    const parentSessionId = ctx.sessions.list.getSnapshot().current
+    if (parentSessionId === undefined) return false
+    const panel = store.getSnapshot().panel
+    const content: PromptContentPart[] = [{ type: 'text', text: trimmed }]
+    const result = await api.start({
+      parentSessionId,
+      content,
+      lookupEnabled: panel.lookup,
+      ...(panel.provider !== '' ? { provider: panel.provider } : {}),
+      ...(panel.model !== '' ? { model: panel.model } : {}),
+      ...(panel.effort !== '' ? { reasoningEffort: panel.effort } : {}),
+    })
+    if (result.ok) {
+      store.openPanel(parentSessionId)
+      store.setActive(result.value.childId)
+      store.patch({ provider: result.value.provider, model: result.value.model, effort: result.value.reasoningEffort ?? '' })
+      void refreshList(store, parentSessionId)
+      void refreshDirectory(store)
+      return true
+    }
+    return false
+  }
+
   ctx.effect(() => {
     const offZh = ctx.locale.register(LOCALE_NS, 'zh', zh)
     const offEn = ctx.locale.register(LOCALE_NS, 'en', en)
@@ -1769,7 +1855,7 @@ export function apply(ctx: Context): void {
     root.render(<>
       <SelectionMenu store={store} t={t} />
       <BringBackMenu store={store} t={t} bringToMain={bringToMain} summarizeBring={summarizeBring} />
-      <SidechatPanel store={store} t={t} formatDuration={formatDuration} bringToMain={bringToMain} summarizeBring={summarizeBring} askSidechat={askSidechat} />
+      <SidechatPanel store={store} t={t} formatDuration={formatDuration} bringToMain={bringToMain} summarizeBring={summarizeBring} askSidechat={askSidechat} askSidechatNew={askSidechatNew} />
     </>)
 
     return () => {
