@@ -695,7 +695,7 @@ function SelectionMenu(props: { store: SidechatStore; t: (key: SidechatLocaleKey
 function BringBackMenu(props: {
   store: SidechatStore
   t: (key: SidechatLocaleKey) => string
-  bringToMain: (text: string) => boolean
+  bringToMain: (text: string) => Promise<boolean>
   summarizeBring: (text: string) => Promise<boolean>
 }) {
   const [local, setLocal] = useState<SelectionAnchor | null>(null)
@@ -756,8 +756,10 @@ function BringBackMenu(props: {
         type="button"
         className={css.selectionButton}
         onClick={() => {
-          if (!props.bringToMain(local.text)) props.store.patch({ error: props.t('insert.failed') })
-          setLocal(null)
+          void props.bringToMain(local.text).then((ok) => {
+            if (!ok) props.store.patch({ error: props.t('insert.failed') })
+            else setLocal(null)
+          })
         }}
       >
         {props.t('insert.direct')}
@@ -774,7 +776,7 @@ function SidechatPanel(props: {
   store: SidechatStore
   t: (key: SidechatLocaleKey) => string
   formatDuration: (ms: number) => string
-  bringToMain: (text: string) => boolean
+  bringToMain: (text: string) => Promise<boolean>
   summarizeBring: (text: string) => Promise<boolean>
 }) {
   const { panel } = useSyncExternalStore(props.store.subscribe, props.store.getSnapshot)
@@ -1135,7 +1137,9 @@ function SidechatPanel(props: {
                     type="button"
                     className={css.messageInsertButton}
                     onClick={() => {
-                      if (!props.bringToMain(text)) props.store.patch({ error: props.t('insert.failed') })
+                      void props.bringToMain(text).then((ok) => {
+                        if (!ok) props.store.patch({ error: props.t('insert.failed') })
+                      })
                     }}
                   >
                     {props.t('insert.direct')}
@@ -1304,6 +1308,40 @@ function SettingsSection(props: { store: SidechatStore; t: (key: SidechatLocaleK
       </label>
       <div className={css.settingsRow}>
         <span className={css.settingsRowText}>
+          <span className={css.settingsRowTitle}>{t('settings.bringModeTitle')}</span>
+          <span className={css.settingsRowDesc}>{t('settings.bringModeDesc')}</span>
+        </span>
+      </div>
+      <div className={css.settingsBringMode}>
+        <label className={`${css.settingsBringOption} ${prefs.bringMode === 'draft' ? css.settingsBringOptionActive : ''}`}>
+          <input
+            type="radio"
+            name="dsh-side-chat-bring-mode"
+            className={css.settingsToggle}
+            checked={prefs.bringMode === 'draft'}
+            onChange={() => { toggle({ bringMode: 'draft' }) }}
+          />
+          <span className={css.settingsRowText}>
+            <span className={css.settingsRowTitle}>{t('settings.bringModeDraftTitle')}</span>
+            <span className={css.settingsRowDesc}>{t('settings.bringModeDraftDesc')}</span>
+          </span>
+        </label>
+        <label className={`${css.settingsBringOption} ${prefs.bringMode === 'context' ? css.settingsBringOptionActive : ''}`}>
+          <input
+            type="radio"
+            name="dsh-side-chat-bring-mode"
+            className={css.settingsToggle}
+            checked={prefs.bringMode === 'context'}
+            onChange={() => { toggle({ bringMode: 'context' }) }}
+          />
+          <span className={css.settingsRowText}>
+            <span className={css.settingsRowTitle}>{t('settings.bringModeContextTitle')}</span>
+            <span className={css.settingsRowDesc}>{t('settings.bringModeContextDesc')}</span>
+          </span>
+        </label>
+      </div>
+      <div className={css.settingsRow}>
+        <span className={css.settingsRowText}>
           <span className={css.settingsRowTitle}>{t('settings.defaultPromptTitle')}</span>
           <span className={css.settingsRowDesc}>{t('settings.defaultPromptDesc')}</span>
         </span>
@@ -1324,8 +1362,11 @@ function SettingsSection(props: { store: SidechatStore; t: (key: SidechatLocaleK
 export function apply(ctx: Context): void {
   const store = createStore()
 
-  /** Append text to the current main conversation's composer draft (never sends). */
-  const bringToMain = (text: string): boolean => {
+  // Localized copy follows the DSH locale (module-level mirror for callbacks).
+  let activeLocale = ctx.locale.getSnapshot().active
+
+  /** Append text to the main composer draft (draft bring mode). */
+  const draftBring = (text: string): boolean => {
     const trimmed = text.trim()
     if (trimmed === '') return false
     const sessionId = ctx.sessions.list.getSnapshot().current
@@ -1342,10 +1383,29 @@ export function apply(ctx: Context): void {
     }
   }
 
-  // Localized copy follows the DSH locale (module-level mirror for callbacks).
-  let activeLocale = ctx.locale.getSnapshot().active
+  /** Inject text into the main conversation as a collapsed, source-tagged context row. */
+  const injectBring = async (text: string, summary: string): Promise<boolean> => {
+    const trimmed = text.trim()
+    if (trimmed === '') return false
+    const sessionId = ctx.sessions.list.getSnapshot().current
+    if (sessionId === undefined) return false
+    const result = await api.inject({ parentSessionId: sessionId, text: trimmed, summary })
+    return result.ok
+  }
 
-  /** Summarize text with the side chat's inherited model, then append the summary to the main composer. */
+  /** Land text in the main conversation per the configured bring mode. */
+  const landText = async (text: string, summaryKey: SidechatLocaleKey): Promise<boolean> => {
+    const mode = store.getSnapshot().prefs.bringMode
+    if (mode === 'context') {
+      return injectBring(text, translate(activeLocale, summaryKey))
+    }
+    return draftBring(text)
+  }
+
+  /** Bring a reply back directly (routed through the configured mode). */
+  const bringToMain = (text: string): Promise<boolean> => landText(text, 'insert.contextSummary')
+
+  /** Summarize text with the side chat's inherited model, then bring the summary back. */
   const summarizeBring = async (text: string): Promise<boolean> => {
     const trimmed = text.trim()
     if (trimmed === '') return false
@@ -1360,7 +1420,7 @@ export function apply(ctx: Context): void {
       locale: activeLocale,
     })
     if (!result.ok) return false
-    return bringToMain(result.value.summary)
+    return landText(result.value.summary, 'insert.summarizeContextSummary')
   }
 
   ctx.effect(() => {
@@ -1382,6 +1442,7 @@ export function apply(ctx: Context): void {
       lookupDefault: typeof raw.lookupDefault === 'boolean' ? raw.lookupDefault : SUBCHAT_PREFS_DEFAULTS.lookupDefault,
       sendImmediately: typeof raw.sendImmediately === 'boolean' ? raw.sendImmediately : SUBCHAT_PREFS_DEFAULTS.sendImmediately,
       defaultPrompt: typeof raw.defaultPrompt === 'string' ? raw.defaultPrompt : SUBCHAT_PREFS_DEFAULTS.defaultPrompt,
+      bringMode: raw.bringMode === 'context' ? 'context' : 'draft',
     })
   })
 

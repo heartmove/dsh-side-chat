@@ -89,6 +89,8 @@ export const api = {
     call<{ accepted: true }>('sidechat.selectPermission', args),
   summarize: (args: { parentSessionId: string; text: string; provider?: string; model?: string; reasoningEffort?: string; locale?: string }) =>
     call<{ summary: string }>('sidechat.summarize', args),
+  inject: (args: { parentSessionId: string; text: string; summary?: string }) =>
+    call<{ accepted: true }>('sidechat.inject', args),
   directory: () => call<SidechatDirectory>('sidechat.directory', {}),
   permissions: () => call<SidechatPermissions>('sidechat.permissions', {}),
   limits: () => call<{ mediaTypes: string[]; maxImageBytes: number; maxImagesPerMessage: number; maxMessageImageBytes: number; maxImagePixels: number }>('sidechat.limits', {}),

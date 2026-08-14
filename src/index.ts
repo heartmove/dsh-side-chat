@@ -174,6 +174,7 @@ const PrefsSchema: z<SubchatPrefs> = z.object({
   lookupDefault: z.boolean().default(SUBCHAT_PREFS_DEFAULTS.lookupDefault),
   sendImmediately: z.boolean().default(SUBCHAT_PREFS_DEFAULTS.sendImmediately),
   defaultPrompt: z.string().default(SUBCHAT_PREFS_DEFAULTS.defaultPrompt),
+  bringMode: z.union(['draft', 'context']).default(SUBCHAT_PREFS_DEFAULTS.bringMode),
 })
 
 /** Live settings face (bound when the settings service is mounted). */
@@ -586,6 +587,22 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
     return { summary: trimmed }
   }
 
+  /** Inject one piece of text into the main conversation as a collapsed context row. */
+  const inject = (payload: unknown): { accepted: true } => {
+    const parentSessionId = requireString(payload, 'parentSessionId')
+    const text = requireString(payload, 'text')
+    const record = payload as { summary?: unknown }
+    const summary = typeof record.summary === 'string' && record.summary.trim() !== '' ? record.summary.trim() : '从侧边聊天带回'
+    const parent = parentOf(parentSessionId)
+    parent.inject({
+      id: randomUUID(),
+      role: 'user',
+      content: [{ type: 'text', text }],
+      source: { kind: 'plugin', plugin: 'dsh-side-chat', form: 'notice', summary },
+    })
+    return { accepted: true }
+  }
+
   /** Full model directory: provider groups → models → reasoning efforts. */
   const directory = async (): Promise<{
     groups: Array<{
@@ -665,6 +682,7 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
     'sidechat.selectModel': selectModel,
     'sidechat.selectPermission': selectPermission,
     'sidechat.summarize': summarize,
+    'sidechat.inject': inject,
     'sidechat.directory': directory,
     'sidechat.permissions': permissions,
     'sidechat.limits': limits,

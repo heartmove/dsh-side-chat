@@ -724,6 +724,27 @@
   accent-color: var(--dsw-alias-state-business-primary);
 }
 
+.settingsBringMode {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settingsBringOption {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-2);
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.settingsBringOptionActive {
+  border-color: var(--dsw-alias-state-business-primary);
+}
+
 .settingsPromptInput {
   box-sizing: border-box;
   width: 100%;

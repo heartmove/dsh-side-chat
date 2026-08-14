@@ -29,11 +29,12 @@ right-side panel, scoped to the conversation it was started from.
   thinking-duration display — all reuse the same UI primitives as the main
   conversation.
 - **Bring AI replies back to the main conversation.** Every assistant reply in
-  the side chat can be brought into the current main conversation's composer:
-  select part of it with the mouse, or insert the whole reply in one click.
-  Either way you can choose **"Insert directly"** (verbatim) or
-  **"Summarize & insert"** (the side chat's inherited model summarizes it
-  first). The text is written to the main composer draft only — never sent.
+  the side chat can be brought into the current main conversation: select part
+  of it with the mouse, or insert the whole reply in one click. Either way you
+  can choose **"Insert directly"** (verbatim) or **"Summarize & insert"** (the
+  side chat's inherited model summarizes it first). Where it lands is
+  configurable: **into the composer draft**, or **as a collapsed context row**
+  (injected as context — not into the composer, never sent).
 - **Resizable, collapsible panel.** Drag to resize (280–720 px), collapse and
   expand; no close button.
 - **Language-aware.** The plugin follows DSH's language setting (Chinese /
@@ -148,7 +149,7 @@ edit before sending.
 ### Bring replies back to the main conversation
 
 Assistant replies in the side chat can be brought into the current main
-conversation's composer (written to the draft only — **never sent**):
+conversation (**never sent**):
 
 1. **Bring a selection.** Select part of an assistant reply in the side chat,
    then choose **"Insert directly"** (verbatim) or **"Summarize & insert"** (the
@@ -156,8 +157,10 @@ conversation's composer (written to the draft only — **never sent**):
 2. **Bring the whole reply.** Each assistant reply has **"Insert directly"** and
    **"Summarize & insert"** buttons under its text, for inserting the full reply
    (or its summary) in one click.
-3. Brought-back text is appended to the main composer draft (on a new paragraph
-   when the draft is non-empty), ready for you to review, edit, then send.
+3. Per the **bring-back target** setting, the content is either **appended to
+   the main composer draft** (edit before sending) or **injected as a collapsed
+   context row** (source-tagged, not into the composer; the model sees it next
+   turn).
 
 ## Settings
 
@@ -168,6 +171,7 @@ Open DSH **Settings → 侧边聊天 (Side chat)** to configure:
 | `lookupDefault` | off | Whether the "look up workspace / parent" switch is on by default for new side chats. |
 | `sendImmediately` | on | Whether selecting text sends it immediately, or stages it as an attachment. |
 | `defaultPrompt` | *(empty)* | Extra prompt appended when the selection is sent immediately. |
+| `bringMode` | `draft` | Where brought-back content lands: `draft` into the composer, or `context` as a collapsed context row. |
 
 Preferences are stored in the DSH settings namespace `dsh-side-chat`.
 

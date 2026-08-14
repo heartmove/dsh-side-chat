@@ -58,11 +58,19 @@ export const zh = {
   'settings.defaultPromptTitle': '默认用户提示词',
   'settings.defaultPromptDesc': '「立即发送」开启时，选中的内容会自动附加这段提示词，让回答更符合你的需求',
   'settings.defaultPromptPlaceholder': '例如：请用中文回答，并尽量简洁…',
+  'settings.bringModeTitle': '带回内容的方式',
+  'settings.bringModeDesc': '把侧边聊天的 AI 回复带回主会话时，内容落在哪里（两种方式都不会立即发送）',
+  'settings.bringModeDraftTitle': '写入输入框草稿',
+  'settings.bringModeDraftDesc': '内容进入主会话输入框，可直接编辑后再发送',
+  'settings.bringModeContextTitle': '注入为折叠提示行',
+  'settings.bringModeContextDesc': '内容作为一条折叠的上下文提示行注入主会话（带来源标记），不写输入框；下次对话时模型可见',
   'insert.direct': '直接带回',
   'insert.summarize': '摘要后带回',
   'insert.summarizing': '摘要中…',
   'insert.failed': '无法写入主会话输入框',
   'insert.summarizeFailed': '摘要失败',
+  'insert.contextSummary': '侧边聊天带回',
+  'insert.summarizeContextSummary': '侧边聊天摘要',
 }
 
 export const en = {
@@ -119,11 +127,19 @@ export const en = {
   'settings.defaultPromptTitle': 'Default prompt',
   'settings.defaultPromptDesc': 'When "send immediately" is on, this prompt is appended to the selection so the answer matches your needs',
   'settings.defaultPromptPlaceholder': 'e.g. Answer in Chinese and keep it concise…',
+  'settings.bringModeTitle': 'Bring-back target',
+  'settings.bringModeDesc': 'Where a side-chat AI reply lands when brought back (neither mode sends immediately)',
+  'settings.bringModeDraftTitle': 'Into the composer draft',
+  'settings.bringModeDraftDesc': 'Text lands in the main composer so you can edit before sending',
+  'settings.bringModeContextTitle': 'As a collapsed context row',
+  'settings.bringModeContextDesc': 'Text is injected as a collapsed, source-tagged context row — not into the composer; the model sees it next turn',
   'insert.direct': 'Insert directly',
   'insert.summarize': 'Summarize & insert',
   'insert.summarizing': 'Summarizing…',
   'insert.failed': 'Could not write to the main composer',
   'insert.summarizeFailed': 'Summarization failed',
+  'insert.contextSummary': 'Brought from side chat',
+  'insert.summarizeContextSummary': 'Side chat summary',
 }
 
 export type SidechatLocaleKey = keyof typeof zh
