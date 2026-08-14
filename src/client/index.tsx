@@ -5,7 +5,7 @@
  * section. The panel is isolated per current conversation and talks to the
  * host /sidechat API.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react'
 import { useSyncExternalStore } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import {
@@ -780,6 +780,58 @@ function BringBackMenu(props: {
   )
 }
 
+/**
+ * Floating entry shown while the panel is closed and the main conversation has
+ * a pending question dialog. It anchors beside the dialog's header (without
+ * covering its text) and disappears once clicked (the panel opens instead).
+ */
+function QuestionFab(props: {
+  store: SidechatStore
+  t: (key: SidechatLocaleKey) => string
+  parentSessionId: string
+}) {
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+
+  useEffect(() => {
+    let raf = 0
+    const tick = (): void => {
+      const el = document.querySelector<HTMLElement>('[data-question-key], [data-approval-key]')
+      if (el !== null) {
+        const header = (el.firstElementChild as HTMLElement | null) ?? el
+        const rect = header.getBoundingClientRect()
+        const size = 32
+        const left = Math.min(rect.right + 8, window.innerWidth - size - 8)
+        const top = rect.top + rect.height / 2
+        setPos({ left, top })
+      } else {
+        setPos(null)
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    tick()
+    return () => { cancelAnimationFrame(raf) }
+  }, [])
+
+  const style: CSSProperties = pos !== null
+    ? { left: pos.left, top: pos.top, transform: 'translateY(-50%)' }
+    : { left: '50%', bottom: 160, transform: 'translateX(-50%)' }
+
+  return (
+    <Tooltip label={props.t('question.openHint')} side="top">
+      <button
+        type="button"
+        className={css.questionFab}
+        style={style}
+        aria-label={props.t('question.openHint')}
+        onClick={() => { props.store.openPanel(props.parentSessionId) }}
+      >
+        <IconPanelLeftOutline16 size={16} />
+        <span className={css.questionFabDot} />
+      </button>
+    </Tooltip>
+  )
+}
+
 /** The side-chat panel body. */
 function SidechatPanel(props: {
   store: SidechatStore
@@ -1113,21 +1165,9 @@ function SidechatPanel(props: {
 
   if (!panel.open) {
     // Panel closed but the main conversation has a pending question dialog:
-    // show a marked floating entry instead of forcing the panel open.
+    // show a floating entry anchored beside the dialog header.
     if (mainQuestion !== null) {
-      return (
-        <Tooltip label={props.t('question.openHint')} side="top">
-          <button
-            type="button"
-            className={css.questionFab}
-            aria-label={props.t('question.openHint')}
-            onClick={() => { props.store.openPanel(panel.parentSessionId) }}
-          >
-            <IconPanelLeftOutline16 size={16} />
-            <span className={css.questionFabDot} />
-          </button>
-        </Tooltip>
-      )
+      return <QuestionFab store={props.store} t={props.t} parentSessionId={panel.parentSessionId} />
     }
     return null
   }

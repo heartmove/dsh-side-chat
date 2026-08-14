@@ -148,9 +148,6 @@
 /* Floating entry shown (panel closed) when the main conversation has a question dialog. */
 .questionFab {
   position: fixed;
-  top: 50%;
-  right: 8px;
-  transform: translateY(-50%);
   z-index: 2147482990;
   display: grid;
   place-items: center;
