@@ -303,6 +303,29 @@
   padding: 6px 8px;
 }
 
+.panelListActions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 2px 2px;
+}
+
+.panelListDeleteAll {
+  font-family: var(--dsw-font-family);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+
+.panelListDeleteAll:hover {
+  color: var(--dsw-alias-state-error-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
 .panelListItem {
   display: flex;
   align-items: center;
@@ -344,6 +367,37 @@
   white-space: nowrap;
   font-size: 12px;
   font-family: var(--ds-font-family-code);
+}
+
+.panelListItemRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.panelListItemRow .panelListItem {
+  flex: 1;
+  min-width: 0;
+}
+
+.panelListItemRemove {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  color: var(--dsw-alias-label-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.panelListItemRemove:hover {
+  color: var(--dsw-alias-state-error-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
 }
 
 /* ---- Transcript ---- */

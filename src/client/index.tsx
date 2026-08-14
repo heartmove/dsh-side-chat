@@ -1060,6 +1060,26 @@ function SidechatPanel(props: {
     })
   }, [panel, props.store])
 
+  /** Delete one side chat from the list. */
+  const disposeItem = useCallback((childId: string) => {
+    void api.dispose({ childId }).then(() => {
+      void refreshList(props.store, panel.parentSessionId)
+      if (panel.activeChildId === childId) {
+        props.store.patch({ activeChildId: null, messages: [] })
+      }
+    })
+  }, [panel.activeChildId, panel.parentSessionId, props.store])
+
+  /** Delete every side chat of this conversation at once. */
+  const disposeAll = useCallback(() => {
+    const ids = panel.items.map((i) => i.childId)
+    if (ids.length === 0) return
+    void Promise.all(ids.map((id) => api.dispose({ childId: id }))).then(() => {
+      void refreshList(props.store, panel.parentSessionId)
+      props.store.patch({ activeChildId: null, messages: [] })
+    })
+  }, [panel.items, panel.parentSessionId, props.store])
+
   const startResize = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
     e.preventDefault()
     const startX = e.clientX
@@ -1256,17 +1276,36 @@ function SidechatPanel(props: {
       <div className={css.panelList}>
         {panel.items.length === 0
           ? <div className={css.panelEmpty}>{props.t('panel.empty')}</div>
-          : panel.items.map((item) => (
-              <button
-                key={item.childId}
-                type="button"
-                className={`${css.panelListItem} ${item.childId === panel.activeChildId ? css.panelListItemActive : ''}`}
-                onClick={() => { props.store.setActive(item.childId); void refreshHistory(props.store, item.childId) }}
-              >
-                <span className={css.panelListItemDot} data-running={item.running ? '1' : undefined} />
-                <span className={css.panelListItemLabel}>{item.childId}</span>
-              </button>
-            ))}
+          : (
+              <>
+                <div className={css.panelListActions}>
+                  <button type="button" className={css.panelListDeleteAll} onClick={disposeAll}>
+                    {props.t('panel.deleteAll')}
+                  </button>
+                </div>
+                {panel.items.map((item) => (
+                  <div key={item.childId} className={css.panelListItemRow}>
+                    <button
+                      type="button"
+                      className={`${css.panelListItem} ${item.childId === panel.activeChildId ? css.panelListItemActive : ''}`}
+                      onClick={() => { props.store.setActive(item.childId); void refreshHistory(props.store, item.childId) }}
+                    >
+                      <span className={css.panelListItemDot} data-running={item.running ? '1' : undefined} />
+                      <span className={css.panelListItemLabel}>{item.childId}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={css.panelListItemRemove}
+                      aria-label={props.t('panel.delete')}
+                      title={props.t('panel.delete')}
+                      onClick={() => { disposeItem(item.childId) }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </>
+            )}
       </div>
 
       <div className={css.panelTranscript} ref={scrollRef}>
