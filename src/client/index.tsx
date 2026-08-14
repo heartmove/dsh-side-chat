@@ -1625,6 +1625,9 @@ export function apply(ctx: Context): void {
         lastQuestion = question
         const questions = question !== undefined && question.kind === 'question' ? (question.payload.questions ?? null) : null
         store.setMainQuestion(questions === null ? null : [...questions])
+        // Open the side panel so the option list is visible even when the user
+        // has no side chat yet (bringing an item auto-creates one).
+        if (questions !== null) store.openPanel(sessionId)
       }
       read()
       unsub = binding.session.subscribe(read)
