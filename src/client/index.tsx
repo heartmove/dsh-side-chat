@@ -1850,6 +1850,22 @@ export function apply(ctx: Context): void {
     return () => { offList(); unsub?.() }
   }, 'dsh-side-chat: track main question dialog')
 
+  // Safety net: once the main conversation no longer has a pending question
+  // dialog, clear the tracked question so the side-panel list disappears too
+  // (covers cases where the subscription misses the settlement edge).
+  ctx.effect(() => {
+    const timer = window.setInterval(() => {
+      if (store.getSnapshot().mainQuestion === null) return
+      const sessionId = ctx.sessions.list.getSnapshot().current
+      if (sessionId === undefined) return
+      const binding = ctx.sessions.binding(sessionId)
+      if (binding === undefined) return
+      const hasQuestion = binding.session.getSnapshot().pending.some((p) => p.kind === 'question')
+      if (!hasQuestion) store.setMainQuestion(null)
+    }, 1200)
+    return () => { window.clearInterval(timer) }
+  }, 'dsh-side-chat: clear stale question dialog')
+
   // The "Side chat" settings section.
   const settingsT = (key: SidechatLocaleKey): string => translate(activeLocale, key)
   ctx.slots.inject('settings.section', () => ctx.slots.register({
