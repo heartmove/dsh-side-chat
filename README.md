@@ -39,9 +39,13 @@ summary, into the composer draft or as a collapsed context row).
   (injected as context — not into the composer, never sent).
 - **Ask about the current question dialog.** When the main conversation shows a
   question dialog (the agent asking you something), the side panel automatically
-  lists the question and each option with a **"Bring"** button: the header's
-  "Bring all" carries every option into the side chat, while an option's "Bring"
-  carries just that one — no manual text selection needed.
+  lists the question and each option (no manual text selection needed). Each
+  question has "Bring all" and each option has "Bring", both offering to
+  **continue an existing side chat** or **start a new one**. The list can be
+  **collapsed / expanded**, and items can be **deleted individually or all at
+  once** (deleted items stay gone).
+- **Deletable side chats.** Each entry in the side-chat list can be deleted
+  individually, or all of them at once via "Delete all".
 - **Resizable, collapsible panel.** Drag to resize (280–720 px), collapse and
   expand; no close button.
 - **Language-aware.** The plugin follows DSH's language setting (Chinese /
@@ -168,6 +172,23 @@ conversation (**never sent**):
    the main composer draft** (edit before sending) or **injected as a collapsed
    context row** (source-tagged, not into the composer; the model sees it next
    turn).
+
+### Ask about the current question dialog
+
+When the main conversation shows a question dialog, the side panel automatically
+lists the question and its options:
+
+1. While the panel is closed, a **floating entry** appears beside the dialog's
+   header — click it to open the panel.
+2. Each question has "Bring all" and each option has "Bring", both offering to
+   **continue an existing side chat** or **start a new one**.
+3. The list can be **collapsed / expanded**, and items can be **deleted
+   individually or all at once** (deleted items stay gone).
+
+### Delete side chats
+
+Each entry in the side-chat list has a "×" delete button; "Delete all" at the
+top-right removes every side chat of the current conversation.
 
 ## Settings
 
