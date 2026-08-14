@@ -145,6 +145,114 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/* Pending main-conversation question dialog, listed item-by-item. */
+.questionBlock {
+  flex: none;
+  max-height: 40%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+}
+
+.questionItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-2);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.questionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.questionHeaderText {
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 20px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.questionBody {
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 22px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.questionDetail {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.questionOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-layer-1);
+  border-radius: 10px;
+  padding: 6px 8px 6px 10px;
+}
+
+.questionOptionText {
+  flex: 1;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+  word-break: break-word;
+}
+
+.questionOptionLabel {
+  font-weight: 500;
+}
+
+.questionOptionDesc {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.questionBringButton {
+  flex: none;
+  font-family: var(--dsw-font-family);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 999px;
+  padding: 2px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.questionBringButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.questionBringButton:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 /* ---- Side-chat list ---- */
 .panelList {
   flex: none;

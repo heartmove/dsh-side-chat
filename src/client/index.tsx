@@ -28,7 +28,7 @@ import {
   ImageLightbox,
   type ImageLoader,
 } from '@deepseek-ai/dsh-client-ui-attachment'
-import type { Context } from '../context-types.ts'
+import type { Context, SideQuestionItem, SideQuestionOption } from '../context-types.ts'
 import {
   api,
   type PromptContentPart,
@@ -86,6 +86,8 @@ interface SidechatSnapshot {
   panel: PanelState
   anchor: SelectionAnchor | null
   prefs: SubchatPrefs
+  /** The current main conversation's pending user-question dialog (null = none). */
+  mainQuestion: SideQuestionItem[] | null
 }
 
 /** The whole browser-side store (one per activation). */
@@ -95,6 +97,7 @@ interface SidechatStore {
   setCurrent(current: string | undefined): void
   setAnchor(anchor: SelectionAnchor | null): void
   setPrefs(prefs: SubchatPrefs): void
+  setMainQuestion(questions: SideQuestionItem[] | null): void
   openPanel(parentSessionId: string): void
   closePanel(): void
   setActive(childId: string): void
@@ -132,6 +135,7 @@ function createStore(): SidechatStore {
   let panel: PanelState = emptyPanel()
   let anchor: SelectionAnchor | null = null
   let prefs: SubchatPrefs = { ...SUBCHAT_PREFS_DEFAULTS }
+  let mainQuestion: SideQuestionItem[] | null = null
   // Per-conversation panel state so switching away and back restores the side
   // chats instead of resetting them. The side chats stay live on the host, so
   // the client must remember each conversation's open panel + active child.
@@ -139,10 +143,10 @@ function createStore(): SidechatStore {
   const listeners = new Set<() => void>()
   // Cached snapshot: useSyncExternalStore compares identity, so the object is
   // only rebuilt on a mutation — never inside getSnapshot itself.
-  let snapshot: SidechatSnapshot = { current, panel, anchor, prefs }
+  let snapshot: SidechatSnapshot = { current, panel, anchor, prefs, mainQuestion }
 
   const notify = (): void => {
-    snapshot = { current, panel, anchor, prefs }
+    snapshot = { current, panel, anchor, prefs, mainQuestion }
     for (const fn of [...listeners]) fn()
   }
 
@@ -160,6 +164,7 @@ function createStore(): SidechatStore {
         ? emptyPanel()
         : (bySession.get(next) ?? { ...emptyPanel(), parentSessionId: next, lookup: prefs.lookupDefault })
       anchor = null
+      mainQuestion = null
       notify()
     },
     setAnchor(next) {
@@ -168,6 +173,10 @@ function createStore(): SidechatStore {
     },
     setPrefs(next) {
       prefs = next
+      notify()
+    },
+    setMainQuestion(questions) {
+      mainQuestion = questions
       notify()
     },
     openPanel(parentSessionId) {
@@ -778,8 +787,9 @@ function SidechatPanel(props: {
   formatDuration: (ms: number) => string
   bringToMain: (text: string) => Promise<boolean>
   summarizeBring: (text: string) => Promise<boolean>
+  askSidechat: (text: string) => Promise<boolean>
 }) {
-  const { panel } = useSyncExternalStore(props.store.subscribe, props.store.getSnapshot)
+  const { panel, mainQuestion } = useSyncExternalStore(props.store.subscribe, props.store.getSnapshot)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const codeLabels = useMemo(() => ({ copyLabel: props.t('panel.copy'), copiedLabel: props.t('panel.copied') }), [props.t])
   const attachmentRailLabels = useMemo(() => ({
@@ -808,6 +818,44 @@ function SidechatPanel(props: {
   const [limits, setLimits] = useState<{ mediaTypes: string[]; maxImageBytes: number; maxImagesPerMessage: number; maxMessageImageBytes: number } | null>(null)
   /** Index of the assistant message whose "summarize then insert" is in flight. */
   const [summarizingIndex, setSummarizingIndex] = useState<number | null>(null)
+  /** Which question-dialog item is being brought into the side chat ('all' or an option label). */
+  const [bringingKey, setBringingKey] = useState<string | null>(null)
+
+  /** Assemble one question + all its options into a prompt. */
+  const buildAllText = (q: SideQuestionItem): string => {
+    const lines: string[] = []
+    if (q.header !== undefined && q.header !== '') lines.push(`【${q.header}】`)
+    lines.push(q.question)
+    if (q.detail !== undefined && q.detail !== '') lines.push(q.detail)
+    const options = q.options ?? []
+    if (options.length > 0) {
+      lines.push(props.t('question.options'))
+      for (const o of options) {
+        lines.push(`- ${o.label}${o.description !== undefined && o.description !== '' ? ` — ${o.description}` : ''}`)
+      }
+    }
+    lines.push(props.t('question.allPrompt'))
+    return lines.join('\n')
+  }
+
+  /** Assemble one question + one specific option into a prompt. */
+  const buildOneText = (q: SideQuestionItem, o: SideQuestionOption): string => {
+    const lines: string[] = []
+    if (q.header !== undefined && q.header !== '') lines.push(`【${q.header}】`)
+    lines.push(q.question)
+    if (q.detail !== undefined && q.detail !== '') lines.push(q.detail)
+    lines.push(`${props.t('question.option')}：${o.label}${o.description !== undefined && o.description !== '' ? ` — ${o.description}` : ''}`)
+    lines.push(props.t('question.onePrompt'))
+    return lines.join('\n')
+  }
+
+  const bringQuestionText = (text: string, key: string): void => {
+    setBringingKey(key)
+    void props.askSidechat(text).then((ok) => {
+      setBringingKey(null)
+      if (!ok) props.store.patch({ error: props.t('question.failed') })
+    })
+  }
 
   const activeItem = panel.items.find((i) => i.childId === panel.activeChildId)
   const activeRunning = activeItem?.running ?? false
@@ -1091,6 +1139,50 @@ function SidechatPanel(props: {
           </Tooltip>
         </div>
       </div>
+
+      {mainQuestion !== null && (
+        <div className={css.questionBlock}>
+          {mainQuestion.map((q) => {
+            const options = q.options ?? []
+            return (
+              <div key={q.id} className={css.questionItem}>
+                <div className={css.questionHeader}>
+                  <span className={css.questionHeaderText}>{q.header ?? q.question}</span>
+                  <button
+                    type="button"
+                    className={css.questionBringButton}
+                    disabled={bringingKey !== null}
+                    onClick={() => { bringQuestionText(buildAllText(q), `all:${q.id}`) }}
+                  >
+                    {bringingKey === `all:${q.id}` ? props.t('question.bringing') : props.t('question.bringAll')}
+                  </button>
+                </div>
+                <div className={css.questionBody}>{q.question}</div>
+                {q.detail !== undefined && q.detail !== '' && <div className={css.questionDetail}>{q.detail}</div>}
+                {options.map((o) => {
+                  const key = `${q.id}:${o.label}`
+                  return (
+                    <div key={o.label} className={css.questionOption}>
+                      <span className={css.questionOptionText}>
+                        <span className={css.questionOptionLabel}>{o.label}</span>
+                        {o.description !== undefined && o.description !== '' && <span className={css.questionOptionDesc}> — {o.description}</span>}
+                      </span>
+                      <button
+                        type="button"
+                        className={css.questionBringButton}
+                        disabled={bringingKey !== null}
+                        onClick={() => { bringQuestionText(buildOneText(q, o), key) }}
+                      >
+                        {bringingKey === key ? props.t('question.bringing') : props.t('question.bringOne')}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       <div className={css.panelList}>
         {panel.items.length === 0
@@ -1423,6 +1515,47 @@ export function apply(ctx: Context): void {
     return landText(result.value.summary, 'insert.summarizeContextSummary')
   }
 
+  /** Ask a piece of text in the side chat (start a new one, or continue the active one). */
+  const askSidechat = async (text: string): Promise<boolean> => {
+    const trimmed = text.trim()
+    if (trimmed === '') return false
+    const parentSessionId = ctx.sessions.list.getSnapshot().current
+    if (parentSessionId === undefined) return false
+    const panel = store.getSnapshot().panel
+    const content: PromptContentPart[] = [{ type: 'text', text: trimmed }]
+
+    if (panel.activeChildId === null) {
+      const result = await api.start({
+        parentSessionId,
+        content,
+        lookupEnabled: panel.lookup,
+        ...(panel.provider !== '' ? { provider: panel.provider } : {}),
+        ...(panel.model !== '' ? { model: panel.model } : {}),
+        ...(panel.effort !== '' ? { reasoningEffort: panel.effort } : {}),
+      })
+      if (result.ok) {
+        store.openPanel(parentSessionId)
+        store.setActive(result.value.childId)
+        store.patch({ provider: result.value.provider, model: result.value.model, effort: result.value.reasoningEffort ?? '' })
+        void refreshList(store, parentSessionId)
+        void refreshDirectory(store)
+        return true
+      }
+      return false
+    }
+
+    const childId = panel.activeChildId
+    setItemRunning(store, childId, true)
+    const result = await api.followup({ childId, content, lookupEnabled: panel.lookup })
+    if (!result.ok) {
+      setItemRunning(store, childId, false)
+      store.patch({ error: result.error.message })
+    }
+    void refreshList(store, parentSessionId)
+    void refreshHistory(store, childId)
+    return result.ok
+  }
+
   ctx.effect(() => {
     const offZh = ctx.locale.register(LOCALE_NS, 'zh', zh)
     const offEn = ctx.locale.register(LOCALE_NS, 'en', en)
@@ -1465,6 +1598,42 @@ export function apply(ctx: Context): void {
     return ctx.sessions.list.subscribe(sync)
   }, 'dsh-side-chat: follow current conversation')
 
+  // Track the main conversation's pending user-question dialog so the panel can
+  // list its questions/options with per-item bring-back buttons. Only
+  // re-publishes when the question object identity changes.
+  ctx.effect(() => {
+    let unsub: (() => void) | undefined
+    let lastQuestion: unknown = undefined
+    const follow = (): void => {
+      unsub?.()
+      unsub = undefined
+      lastQuestion = undefined
+      const sessionId = ctx.sessions.list.getSnapshot().current
+      if (sessionId === undefined) {
+        store.setMainQuestion(null)
+        return
+      }
+      const binding = ctx.sessions.binding(sessionId)
+      if (binding === undefined) {
+        store.setMainQuestion(null)
+        return
+      }
+      const read = (): void => {
+        const pending = binding.session.getSnapshot().pending
+        const question = pending.find((p) => p.kind === 'question')
+        if (question === lastQuestion) return
+        lastQuestion = question
+        const questions = question !== undefined && question.kind === 'question' ? (question.payload.questions ?? null) : null
+        store.setMainQuestion(questions === null ? null : [...questions])
+      }
+      read()
+      unsub = binding.session.subscribe(read)
+    }
+    follow()
+    const offList = ctx.sessions.list.subscribe(follow)
+    return () => { offList(); unsub?.() }
+  }, 'dsh-side-chat: track main question dialog')
+
   // The "Side chat" settings section.
   const settingsT = (key: SidechatLocaleKey): string => translate(activeLocale, key)
   ctx.slots.inject('settings.section', () => ctx.slots.register({
@@ -1487,7 +1656,7 @@ export function apply(ctx: Context): void {
     root.render(<>
       <SelectionMenu store={store} t={t} />
       <BringBackMenu store={store} t={t} bringToMain={bringToMain} summarizeBring={summarizeBring} />
-      <SidechatPanel store={store} t={t} formatDuration={formatDuration} bringToMain={bringToMain} summarizeBring={summarizeBring} />
+      <SidechatPanel store={store} t={t} formatDuration={formatDuration} bringToMain={bringToMain} summarizeBring={summarizeBring} askSidechat={askSidechat} />
     </>)
 
     return () => {

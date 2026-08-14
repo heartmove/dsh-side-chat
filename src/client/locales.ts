@@ -71,6 +71,14 @@ export const zh = {
   'insert.summarizeFailed': '摘要失败',
   'insert.contextSummary': '侧边聊天带回',
   'insert.summarizeContextSummary': '侧边聊天摘要',
+  'question.options': '可选选项',
+  'question.option': '选项',
+  'question.bringAll': '带入全部',
+  'question.bringOne': '带入',
+  'question.bringing': '带入中…',
+  'question.failed': '带入侧边聊天失败',
+  'question.allPrompt': '请帮我理解上面的问题和各个选项的含义，并给出选择建议。',
+  'question.onePrompt': '请帮我理解这个选项的含义，以及它在这个问题中的利弊。',
 }
 
 export const en = {
@@ -140,6 +148,14 @@ export const en = {
   'insert.summarizeFailed': 'Summarization failed',
   'insert.contextSummary': 'Brought from side chat',
   'insert.summarizeContextSummary': 'Side chat summary',
+  'question.options': 'Options',
+  'question.option': 'Option',
+  'question.bringAll': 'Bring all',
+  'question.bringOne': 'Bring',
+  'question.bringing': 'Bringing…',
+  'question.failed': 'Failed to bring into the side chat',
+  'question.allPrompt': 'Please explain what this question is asking and what each option means, and advise how I should choose.',
+  'question.onePrompt': 'Please explain what this option means and its trade-offs for this question.',
 }
 
 export type SidechatLocaleKey = keyof typeof zh

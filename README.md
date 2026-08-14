@@ -37,6 +37,11 @@ summary, into the composer draft or as a collapsed context row).
   side chat's inherited model summarizes it first). Where it lands is
   configurable: **into the composer draft**, or **as a collapsed context row**
   (injected as context — not into the composer, never sent).
+- **Ask about the current question dialog.** When the main conversation shows a
+  question dialog (the agent asking you something), the side panel automatically
+  lists the question and each option with a **"Bring"** button: the header's
+  "Bring all" carries every option into the side chat, while an option's "Bring"
+  carries just that one — no manual text selection needed.
 - **Resizable, collapsible panel.** Drag to resize (280–720 px), collapse and
   expand; no close button.
 - **Language-aware.** The plugin follows DSH's language setting (Chinese /
