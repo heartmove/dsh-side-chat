@@ -1593,7 +1593,11 @@ export function apply(ctx: Context): void {
     const panel = store.getSnapshot().panel
     const content: PromptContentPart[] = [{ type: 'text', text: trimmed }]
 
-    if (panel.activeChildId === null) {
+    // Reuse the active side chat, else the first existing one, else create one —
+    // so bringing dialog questions in doesn't pile up a new side chat per ask.
+    const target = panel.activeChildId ?? panel.items[0]?.childId ?? null
+
+    if (target === null) {
       const result = await api.start({
         parentSessionId,
         content,
@@ -1613,7 +1617,8 @@ export function apply(ctx: Context): void {
       return false
     }
 
-    const childId = panel.activeChildId
+    const childId = target
+    if (childId !== panel.activeChildId) store.setActive(childId)
     setItemRunning(store, childId, true)
     const result = await api.followup({ childId, content, lookupEnabled: panel.lookup })
     if (!result.ok) {
