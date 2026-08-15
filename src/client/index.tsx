@@ -904,6 +904,12 @@ function SidechatPanel(props: {
   /** Whether the question-dialog list is collapsed (headers only). */
   const [questionCollapsed, setQuestionCollapsed] = useState(false)
 
+  // Auto-expand the panel whenever a side chat is started or activated, so
+  // starting from a collapsed panel still reveals the conversation.
+  useEffect(() => {
+    if (panel.open && panel.activeChildId !== null) setCollapsed(false)
+  }, [panel.open, panel.activeChildId])
+
   /** Assemble one question + all its options into a prompt. */
   const buildAllText = (q: SideQuestionItem): string => {
     const lines: string[] = []
