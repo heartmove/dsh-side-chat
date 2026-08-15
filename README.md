@@ -173,6 +173,8 @@ conversation (**never sent**):
    context row** (source-tagged, not into the composer; the model sees it next
    turn).
 
+![Bring-back demo](docs/bring-back.gif)
+
 ### Ask about the current question dialog
 
 When the main conversation shows a question dialog, the side panel automatically
@@ -184,6 +186,8 @@ lists the question and its options:
    **continue an existing side chat** or **start a new one**.
 3. The list can be **collapsed / expanded**, and items can be **deleted
    individually or all at once** (deleted items stay gone).
+
+![Question dialog demo](docs/question-dialog.gif)
 
 ### Delete side chats
 
