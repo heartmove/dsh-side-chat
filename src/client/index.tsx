@@ -806,7 +806,7 @@ function BringBackMenu(props: {
 function QuestionFab(props: {
   store: SidechatStore
   t: (key: SidechatLocaleKey) => string
-  parentSessionId: string
+  onOpen: () => void
 }) {
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
 
@@ -851,7 +851,7 @@ function QuestionFab(props: {
         className={css.questionFab}
         style={style}
         aria-label={props.t('question.openHint')}
-        onClick={() => { props.store.openPanel(props.parentSessionId) }}
+        onClick={props.onOpen}
       >
         <IconPanelLeftOutline16 size={16} />
         <span className={css.questionFabDot} />
@@ -909,6 +909,12 @@ function SidechatPanel(props: {
   useEffect(() => {
     if (panel.open && panel.activeChildId !== null) setCollapsed(false)
   }, [panel.open, panel.activeChildId])
+
+  // Open (and expand) the panel to show the pending question dialog.
+  const openQuestionPanel = useCallback(() => {
+    props.store.openPanel(panel.parentSessionId)
+    setCollapsed(false)
+  }, [props.store, panel.parentSessionId])
 
   /** Assemble one question + all its options into a prompt. */
   const buildAllText = (q: SideQuestionItem): string => {
@@ -1225,12 +1231,17 @@ function SidechatPanel(props: {
     // Panel closed but the main conversation has a pending question dialog:
     // show a floating entry anchored beside the dialog header.
     if (mainQuestion !== null) {
-      return <QuestionFab store={props.store} t={props.t} parentSessionId={panel.parentSessionId} />
+      return <QuestionFab store={props.store} t={props.t} onOpen={openQuestionPanel} />
     }
     return null
   }
 
   if (collapsed) {
+    // Collapsed but a question dialog is pending: keep the floating entry so it
+    // can still be opened from beside the dialog (not just the collapsed handle).
+    if (mainQuestion !== null) {
+      return <QuestionFab store={props.store} t={props.t} onOpen={openQuestionPanel} />
+    }
     return (
       <Tooltip label={props.t('panel.expand')} side="bottom">
         <button type="button" className={css.collapsedHandle} onClick={() => { setCollapsed(false) }}>
