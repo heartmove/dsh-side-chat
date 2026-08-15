@@ -1,10 +1,18 @@
 # dsh-side-chat — 侧边聊天 (Side chat)
 
-A [DSH](https://www.deepseek.com) web plugin that lets you select part of a
-conversation and ask about it in a **side chat** — a dedicated chat opened in a
-right-side panel, scoped to the conversation it was started from. Side-chat AI
-replies can also be **brought back to the main conversation** (directly or as a
-summary, into the composer draft or as a collapsed context row).
+An **enhanced version of a Codex-style side chat** for
+[DSH](https://www.deepseek.com): a dedicated, agentic chat in a right-side
+panel, scoped to the conversation it was started from and aware of its
+workspace. Select part of a conversation and ask about it in the side chat; the
+side chat inherits the main conversation's toolset, model, and permission
+preset, and its AI replies can be **brought back to the main conversation**
+(directly or as a summary, into the composer draft or as a collapsed context
+row).
+
+On top of the Codex-style base, it adds one extra capability: when the main
+agent asks you a **question dialog**, you can side-chat about the question and
+its options **without interrupting the flow** — let the AI help you think it
+through first, then bring the answer back and answer the dialog.
 
 > 中文文档见 [README.zh.md](./README.zh.md).
 
@@ -19,7 +27,8 @@ summary, into the composer draft or as a collapsed context row).
   Every conversation gets its own side chat.
 - **Inherits main-conversation context.** The side chat is aware of the
   conversation it was started from and its working directory, and inherits the
-  main conversation's model, thinking effort, and permission preset by default.
+  main conversation's toolset, model, thinking effort, and permission preset by
+  default — so it can act on the same workspace as the main conversation.
 - **Model / effort / permission are adjustable.** A two-level model menu
   (provider → model → effort) and a permission menu are copied from the main
   conversation, so each side chat can be tuned independently.
@@ -37,19 +46,51 @@ summary, into the composer draft or as a collapsed context row).
   side chat's inherited model summarizes it first). Where it lands is
   configurable: **into the composer draft**, or **as a collapsed context row**
   (injected as context — not into the composer, never sent).
-- **Ask about the current question dialog.** When the main conversation shows a
-  question dialog (the agent asking you something), the side panel automatically
-  lists the question and each option (no manual text selection needed). Each
-  question has "Bring all" and each option has "Bring", both offering to
-  **continue an existing side chat** or **start a new one**. The list can be
-  **collapsed / expanded**, and items can be **deleted individually or all at
-  once** (deleted items stay gone).
+- **Ask about the current question dialog — without interrupting the flow.**
+  When the main conversation shows a question dialog (the agent asking you
+  something), the side panel automatically lists the question and each option
+  (no manual text selection needed). Each question has "Bring all" and each
+  option has "Bring", both offering to **continue an existing side chat** or
+  **start a new one**. The list can be **collapsed / expanded**, and items can
+  be **deleted individually or all at once** (deleted items stay gone).
 - **Deletable side chats.** Each entry in the side-chat list can be deleted
   individually, or all of them at once via "Delete all".
 - **Resizable, collapsible panel.** Drag to resize (280–720 px), collapse and
   expand; no close button.
 - **Language-aware.** The plugin follows DSH's language setting (Chinese /
   English).
+
+## Codex-style side chat, enhanced
+
+This plugin is an **enhanced version of a Codex-style side chat**: a second,
+agentic chat that works beside the main conversation — plus an extra capability
+on top of the Codex-style base: side-chatting about the current **question
+dialog** without interrupting the flow.
+
+**The Codex-style base.** The side chat is a real DSH agent session, not a
+scratchpad:
+
+- It **inherits the main conversation's setup** — toolset, permission preset,
+  model / thinking effort, and working directory — so it can read and work with
+  the same workspace as the main conversation, subject to the permission preset
+  you choose for it.
+- The **"Look up workspace / parent when needed"** switch (default off) lets it
+  read workspace files and the parent conversation's records when the task needs
+  more context.
+- **Model / thinking effort / permission preset are adjustable per chat**, so a
+  hard task can be handed to a stronger model without touching the main
+  conversation.
+- The final reply (or a summary of it) can be **brought back** into the main
+  conversation — into the composer draft or as a collapsed context row — the
+  Codex-style "hand the result over" without copy-pasting.
+
+**The enhancement: question-dialog side chat, no flow interruption.** When the
+main agent asks you something, the flow normally stops until you answer. This
+plugin lets you keep moving: the side panel automatically lists the question and
+every option; bring the whole question or any single option into a side chat
+(new or existing), let the AI analyze it for you, then bring the answer back and
+answer the dialog. The main conversation simply waits — nothing is interrupted,
+and you never have to answer before you're ready.
 
 ## Requirements
 
@@ -186,6 +227,10 @@ lists the question and its options:
    **continue an existing side chat** or **start a new one**.
 3. The list can be **collapsed / expanded**, and items can be **deleted
    individually or all at once** (deleted items stay gone).
+
+The main conversation keeps waiting on the dialog — nothing is interrupted; do
+the research in the side chat first, then bring the answer back and answer the
+dialog.
 
 ![Question dialog demo](docs/question-dialog.gif)
 
