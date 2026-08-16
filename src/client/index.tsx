@@ -860,6 +860,34 @@ function QuestionFab(props: {
   )
 }
 
+/** Panel width bounds. The panel never takes more than ~40% of the window and
+ * never squeezes the main chat below a usable minimum — so the panel adapts to
+ * whatever resolution / zoom the browser window is at. */
+const PANEL_MIN_WIDTH = 280
+const PANEL_MAX_WIDTH = 720
+const PANEL_DEFAULT_WIDTH = 360
+const MAIN_CHAT_MIN_WIDTH = 480
+/** localStorage key remembering the last panel width across reloads. */
+const PANEL_WIDTH_KEY = 'dsh-side-chat.panelWidth'
+
+/** The viewport-aware maximum panel width for the current window. */
+function panelCap(): number {
+  const vw = window.innerWidth
+  return Math.max(PANEL_MIN_WIDTH, Math.min(PANEL_MAX_WIDTH, vw * 0.4, vw - MAIN_CHAT_MIN_WIDTH))
+}
+
+/** The last user-chosen width, if any (re-clamped to the viewport on load). */
+function savedPanelWidth(): number | null {
+  try {
+    const raw = window.localStorage.getItem(PANEL_WIDTH_KEY)
+    if (raw === null) return null
+    const n = Number(raw)
+    return Number.isFinite(n) && n > 0 ? n : null
+  } catch {
+    return null
+  }
+}
+
 /** The side-chat panel body. */
 function SidechatPanel(props: {
   store: SidechatStore
@@ -891,7 +919,12 @@ function SidechatPanel(props: {
     title: props.t('image.dropTitle'),
     desc: props.t('image.dropDesc'),
   }), [props.t])
-  const [width, setWidth] = useState(360)
+  // Width starts at the user's last choice when it fits the current window,
+  // otherwise adapts to the viewport (small screens get a smaller default).
+  const [width, setWidth] = useState(() => {
+    const base = savedPanelWidth() ?? PANEL_DEFAULT_WIDTH
+    return Math.max(PANEL_MIN_WIDTH, Math.min(panelCap(), base))
+  })
   const [collapsed, setCollapsed] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const [dragActive, setDragActive] = useState(false)
@@ -962,6 +995,27 @@ function SidechatPanel(props: {
     document.documentElement.style.setProperty('--dsh-subchat-width', w)
     return () => { document.documentElement.style.setProperty('--dsh-subchat-width', '0px') }
   }, [panel.open, collapsed, width])
+
+  // Re-adapt the panel width when the window is resized: if the viewport
+  // shrinks (smaller window, different monitor, higher zoom), the panel is
+  // clamped to the new cap and the layout margin follows via the effect above.
+  useEffect(() => {
+    const onResize = (): void => {
+      setWidth((w) => Math.min(w, panelCap()))
+    }
+    window.addEventListener('resize', onResize)
+    return () => { window.removeEventListener('resize', onResize) }
+  }, [])
+
+  // Remember the width across reloads; on the next load it is re-clamped to
+  // whatever window is present then.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PANEL_WIDTH_KEY, String(width))
+    } catch {
+      // Storage unavailable (private mode etc.) — the width just won't persist.
+    }
+  }, [width])
 
   // Lazy-load the model/permission directory whenever the panel is open but the
   // directory has not hydrated yet (covers page reload + continue + direct open).
@@ -1119,7 +1173,7 @@ function SidechatPanel(props: {
     const startX = e.clientX
     const startWidth = width
     const onMove = (ev: globalThis.MouseEvent): void => {
-      setWidth(Math.min(720, Math.max(280, startWidth + (startX - ev.clientX))))
+      setWidth(Math.max(PANEL_MIN_WIDTH, Math.min(panelCap(), startWidth + (startX - ev.clientX))))
     }
     const onUp = (): void => {
       window.removeEventListener('mousemove', onMove)

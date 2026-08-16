@@ -55,8 +55,11 @@ through first, then bring the answer back and answer the dialog.
   be **deleted individually or all at once** (deleted items stay gone).
 - **Deletable side chats.** Each entry in the side-chat list can be deleted
   individually, or all of them at once via "Delete all".
-- **Resizable, collapsible panel.** Drag to resize (280–720 px), collapse and
-  expand; no close button.
+- **Resolution-aware, resizable, collapsible panel.** Drag to resize
+  (280–720 px); the width is automatically capped to keep the panel within
+  ~40% of the window and to leave the main chat usable, re-adapts when the
+  window is resized (different monitor, zoom), and is remembered across
+  reloads. Collapse and expand; no close button.
 - **Language-aware.** The plugin follows DSH's language setting (Chinese /
   English).
 
