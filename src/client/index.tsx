@@ -27,7 +27,7 @@ import {
   ImageGallery,
   ImageLightbox,
   type ImageLoader,
-} from '@deepseek-ai/dsh-client-ui-attachment'
+} from './attachments/index.ts'
 import type { Context, SideQuestionItem, SideQuestionOption } from '../context-types.ts'
 import {
   api,
@@ -1467,7 +1467,7 @@ function SidechatPanel(props: {
               <div key={index} className={css.messageUser}>
                 {text !== '' && <span className={css.messageUserText}>{text}</span>}
                 {images.length > 0 && (
-                  <ImageGallery images={images as unknown as Array<{ attachment: never }>} load={imageLoader} align="end" labels={messageImageLabels} />
+                  <ImageGallery images={images.map((image) => image.attachment)} load={imageLoader} align="end" labels={messageImageLabels} />
                 )}
               </div>
             )

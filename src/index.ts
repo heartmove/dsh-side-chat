@@ -12,10 +12,20 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import * as agentApi from '@deepseek-ai/dsh-agent'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
 import { SettingsConflictError, settingsNamespace, type SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from 'schemastery'
-import type { Context, SideAgent, SideAgentHandle, SideImageAttachmentRef, SideSession, SideSessionEvent } from './context-types.ts'
+import type {
+  Context,
+  SideAgent,
+  SideAgentHandle,
+  SideImageAttachmentRef,
+  SideInstallModelSelection,
+  SideModelSelectionRef,
+  SideSession,
+  SideSessionEvent,
+} from './context-types.ts'
 import { SUBCHAT_PREFS_DEFAULTS, SUBCHAT_PREFS_NS, type SubchatPrefs } from './settings-shared.ts'
 import { isTrustedApiRequest } from './trust-fence.ts'
 import { optionalBoolean, readJsonBody, requireString, SidechatError, writeError, writeJson, writeOk } from './wire.ts'
@@ -38,19 +48,21 @@ export const inject = [
   'commands',
 ]
 
-/** Per-side-chat model selection (mutable; the request waterfall reads it live). */
-interface SidechatSelection {
-  provider: string
-  model: string
-  reasoningEffort?: string
-}
+/**
+ * Couple a side chat's selection to its agent so prompt assembly and request
+ * routing switch together. Read through the namespace object rather than a
+ * named import: a named import fails the ESM link on any build that drops the
+ * export, while this degrades to the request-only waterfall in `start`.
+ */
+const installModelSelection = (agentApi as unknown as { installModelSelection?: SideInstallModelSelection }).installModelSelection
 
 /** One live side chat the host owns. */
 interface SidechatRecord {
   childId: string
   parentSessionId: string
   handle: SideAgentHandle
-  selection: SidechatSelection
+  /** Live selection coupled to the agent; mutated by `sidechat.selectModel`. */
+  selection: SideModelSelectionRef
   createdAt: number
 }
 
@@ -359,10 +371,15 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
     const reasoningEffort = explicitEffort ?? parentConfig?.reasoningEffort
     const cwd = parent.session.header.cwd
 
-    const selection: SidechatSelection = {
-      provider,
-      model,
-      ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
+    // The mutable ref the agent reads live, so `sidechat.selectModel` takes
+    // effect on a later step instead of only after a restart.
+    const selection: SideModelSelectionRef = {
+      current: {
+        provider,
+        model,
+        ...(reasoningEffort === undefined ? {} : { reasoningEffort }),
+      },
+      assembled: undefined,
     }
     const parentCtx = parent.ctx
 
@@ -383,11 +400,22 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
         if (parentCtx !== undefined) {
           ctx.agentPresets.composeFrom(agentCtx, parentCtx)
         }
-        // Model / reasoning-effort are adjustable at runtime: a request
-        // waterfall applies the live selection over every model call.
+        // Model / reasoning-effort are adjustable at runtime. The coupled
+        // installer snapshots the selection before prompt assembly delegates
+        // and applies the same value to the request config, so a switch made
+        // mid-turn lands on a later step instead of assembling the prompt for
+        // the inherited model while calling the selected one. An absent
+        // effort clears the inherited one, restoring provider/default behavior.
+        if (installModelSelection !== undefined) {
+          installModelSelection(agentCtx, selection)
+          return
+        }
+        // Fallback for builds without that API: rewrites the request config
+        // only, which can split prompt assembly from routing mid-turn.
         agentCtx.on('agent/request', async (_payload: unknown, next: () => Promise<Record<string, unknown>>) => {
           const resolved = await next()
-          const sel = selection
+          const sel = selection.current
+          if (sel === undefined) return resolved
           const { reasoningEffort: _drop, ...rest } = resolved
           return {
             ...rest,
@@ -509,9 +537,13 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
     const record = sideChats.get(childId)
     if (record === undefined) throw new SidechatError('child-unavailable', `side chat "${childId}" is not live`, 409)
     const reasoningEffort = (payload as Record<string, unknown> | null)?.reasoningEffort
-    record.selection.provider = provider
-    record.selection.model = model
-    record.selection.reasoningEffort = typeof reasoningEffort === 'string' && reasoningEffort !== '' ? reasoningEffort : undefined
+    // Replace the whole object so the coupled listeners never observe a
+    // half-written selection (provider switched, model still inherited).
+    record.selection.current = {
+      provider,
+      model,
+      ...(typeof reasoningEffort === 'string' && reasoningEffort !== '' ? { reasoningEffort } : {}),
+    }
     return { accepted: true }
   }
 

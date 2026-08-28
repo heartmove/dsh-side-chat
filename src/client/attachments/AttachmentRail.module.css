@@ -1,0 +1,89 @@
+.root {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.rail {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px;
+}
+
+.rail::-webkit-scrollbar {
+  display: none;
+}
+
+.item {
+  position: relative;
+  flex: none;
+}
+
+.thumbnail {
+  display: block;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--dsw-color-border, rgba(0, 0, 0, 0.1));
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+}
+
+.thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--dsw-color-surface-raised, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  color: var(--dsw-color-text-secondary, #646a73);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.item:hover .remove,
+.remove:focus-visible {
+  opacity: 1;
+}
+
+.arrow {
+  position: absolute;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--dsw-color-border, rgba(0, 0, 0, 0.1));
+  border-radius: 50%;
+  background: var(--dsw-color-surface-raised, #fff);
+  color: var(--dsw-color-text-secondary, #646a73);
+  cursor: pointer;
+}
+
+.arrowLeft {
+  left: -10px;
+}
+
+.arrowRight {
+  right: -10px;
+}

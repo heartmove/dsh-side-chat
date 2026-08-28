@@ -1,0 +1,38 @@
+.mask {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Decoration only: drag targeting must stay on the page below. */
+  pointer-events: none;
+  background: rgba(255, 255, 255, 0.72);
+  border: 2px dashed var(--dsw-color-border-strong, #4d6bfe);
+  border-radius: 12px;
+}
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.illustration {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--dsw-color-text, #1f2329);
+}
+
+.desc {
+  font-size: 13px;
+  color: var(--dsw-color-text-secondary, #646a73);
+}

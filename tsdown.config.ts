@@ -30,7 +30,15 @@ const NODE_BUILTINS = new Set([
   ...builtinModules.map((id) => `node:${id}`),
 ])
 
-/** Module specifiers the web shell shares into the frozen module table. */
+/**
+ * Module specifiers the web shell shares into the frozen module table.
+ *
+ * 0.1.2 dropped `dsh-client-runtime` (now `dsh-client-modules`),
+ * `dsh-client-web-react` (React is a baseline external) and
+ * `dsh-client-schema-form`; `dsh-client-ui-attachment` keeps its slot
+ * registrations but no longer exports React components, so the panel owns its
+ * own copies (see src/client/attachments/).
+ */
 const CLIENT_EXTERNALS = [
   'react',
   'react/jsx-runtime',
@@ -38,15 +46,11 @@ const CLIENT_EXTERNALS = [
   'react-dom/client',
   'cordis',
   '@deepseek-ai/dsh-client-ui-slots',
-  '@deepseek-ai/dsh-client-web-react',
   '@deepseek-ai/dsh-client-ui-primitives',
-  '@deepseek-ai/dsh-client-ui-attachment',
-  '@deepseek-ai/dsh-client-schema-form',
-  '@deepseek-ai/dsh-client-runtime/client',
 ]
 
-/** Wire/type layers a client bundle may inline. */
-const INLINE_SAFE = /^@deepseek-ai\/dsh-(host-apiproxy|session|llm|tools|brand)(\/|$)/
+/** Wire/type layers a client bundle may inline (0.1.2 removed host-apiproxy). */
+const INLINE_SAFE = /^@deepseek-ai\/dsh-(session|llm|tools|brand)(\/|$)/
 
 const CSS_VIRTUAL_PREFIX = '\0dsh-css:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'

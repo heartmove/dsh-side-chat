@@ -167,6 +167,30 @@ export interface SideAgentsService {
   create(options: SideCreateAgentOptions): Promise<SideAgentHandle>
 }
 
+/** Live provider / model / reasoning-effort selection for one agent. */
+export interface SideModelSelection {
+  provider: string
+  model: string
+  reasoningEffort?: string
+}
+
+/**
+ * Mutable selection plus the value captured when the current step entered
+ * prompt assembly (`current` / `assembled`).
+ */
+export interface SideModelSelectionRef {
+  current: SideModelSelection | undefined
+  assembled: SideModelSelection | undefined
+}
+
+/**
+ * Couple a mutable selection to an agent's prompt assembly and request routing
+ * (`installModelSelection` on the agent package). Typed structurally rather
+ * than imported: this plugin resolves outside the DSH monorepo's single cordis
+ * instance, so the upstream export is reached through a loose signature.
+ */
+export type SideInstallModelSelection = (agentCtx: Context, selection: SideModelSelectionRef) => () => void
+
 /** The workspace registry face (archive a session durably). */
 export interface SideWorkspaceRegistry {
   archiveSession(sessionId: string): Promise<void>
