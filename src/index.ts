@@ -14,7 +14,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import * as agentApi from '@deepseek-ai/dsh-agent'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
-import { SettingsConflictError, settingsNamespace, type SettingsNamespace } from '@deepseek-ai/dsh-settings'
+import { SettingsConflictError, type SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from 'schemastery'
 import type {
   Context,
@@ -773,7 +773,7 @@ export function apply(ctx: Context): void {
   // The client reads/writes it through the plugin's own fenced routes, since
   // the DSH settings RPC domain only serves allowlisted namespaces.
   ctx.inject(['settings'], (sctx: Context) => {
-    const ns: SettingsNamespace = settingsNamespace(SUBCHAT_PREFS_NS)
+    const ns = SUBCHAT_PREFS_NS as SettingsNamespace
     const scope = sctx.settings.register(ns, PrefsSchema) as {
       get(): SubchatPrefs
       watch(cb: (next: SubchatPrefs, prev: SubchatPrefs) => void): () => void

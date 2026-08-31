@@ -900,7 +900,10 @@ function SidechatPanel(props: {
 }) {
   const { panel, mainQuestion, dismissedQuestionIds } = useSyncExternalStore(props.store.subscribe, props.store.getSnapshot)
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  const codeLabels = useMemo(() => ({ copyLabel: props.t('panel.copy'), copiedLabel: props.t('panel.copied') }), [props.t])
+  const markdownLabels = useMemo(() => ({
+    code: { copyLabel: props.t('panel.copy'), copiedLabel: props.t('panel.copied') },
+    footnotes: props.t('panel.footnotes'),
+  }), [props.t])
   const attachmentRailLabels = useMemo(() => ({
     group: props.t('image.railGroup'),
     open: props.t('image.railOpen'),
@@ -1477,7 +1480,7 @@ function SidechatPanel(props: {
               {reasoningBlocks.map((block, rIndex) => (
                 <ReasoningRow key={rIndex} text={block.type === 'reasoning' ? block.text : ''} t={props.t} />
               ))}
-              {text !== '' && <MarkdownText text={text} codeLabels={codeLabels} />}
+              {text !== '' && <MarkdownText text={text} labels={markdownLabels} />}
               {text !== '' && (
                 <div className={css.messageActions}>
                   <button
