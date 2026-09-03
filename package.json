@@ -1,6 +1,6 @@
 {
   "name": "dsh-side-chat-plus",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "侧边聊天 Plus (Side chat Plus) — DSH web plugin: select text in a conversation and ask it in a per-session side chat (hidden ordinary session, own right-side panel, inherits model/effort/permissions, lookup toggle).",
   "private": false,
   "type": "module",
