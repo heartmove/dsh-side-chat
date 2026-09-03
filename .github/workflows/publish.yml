@@ -73,9 +73,17 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Resolve package version from tag
+      - name: Resolve package version (tag → package.json)
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        shell: bash
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # Tag push (vX.Y.Z): use the tag name, stripping the leading v.
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            # Manual dispatch (no tag): publish the version already in package.json.
+            echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Sync version
         run: |
