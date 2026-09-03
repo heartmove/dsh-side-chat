@@ -44,7 +44,7 @@ import css from './client.module.css'
 import './layout.css'
 
 /** Services required before mounting. */
-export const inject = ['sessions', 'locale', 'slots', 'conversation']
+export const inject = ['sessions', 'locale', 'slots', 'conversation', 'uiSession']
 
 /** A text selection the floating menu anchors to. */
 interface SelectionAnchor {
@@ -828,7 +828,10 @@ function QuestionFab(props: {
         return
       }
       missing = 0
-      const header = (el.firstElementChild as HTMLElement | null) ?? el
+      // The dialog's header (its title/eyebrow block) is the anchor. Newer DSH
+      // wraps it as `section > header` inside the data-question frame, so locate
+      // the `header` tag generically (older builds had it as the first child).
+      const header = el.querySelector<HTMLElement>('header') ?? (el.firstElementChild as HTMLElement | null) ?? el
       const rect = header.getBoundingClientRect()
       const size = 32
       const left = Math.min(rect.right + 8, window.innerWidth - size - 8)
@@ -1889,39 +1892,30 @@ export function apply(ctx: Context): void {
   }, 'dsh-side-chat: follow current conversation')
 
   // Track the main conversation's pending user-question dialog so the panel can
-  // list its questions/options with per-item bring-back buttons. Only
-  // re-publishes when the question object identity changes.
+  // list its questions/options with per-item bring-back buttons. DSH surfaces
+  // the pending interaction through the `uiSession.pendingInteractions` service
+  // (a per-session interaction), so we read it there instead of a session
+  // snapshot. Only re-publishes when the question object identity changes.
   ctx.effect(() => {
-    let unsub: (() => void) | undefined
     let lastQuestion: unknown = undefined
-    const follow = (): void => {
-      unsub?.()
-      unsub = undefined
-      lastQuestion = undefined
+    const read = (): void => {
       const sessionId = ctx.sessions.list.getSnapshot().current
       if (sessionId === undefined) {
         store.setMainQuestion(null)
         return
       }
-      const binding = ctx.sessions.binding(sessionId)
-      if (binding === undefined) {
-        store.setMainQuestion(null)
-        return
-      }
-      const read = (): void => {
-        const pending = binding.session.getSnapshot().pending
-        const question = pending.find((p) => p.kind === 'question')
-        if (question === lastQuestion) return
-        lastQuestion = question
-        const questions = question !== undefined && question.kind === 'question' ? (question.payload.questions ?? null) : null
-        store.setMainQuestion(questions === null ? null : [...questions])
-      }
-      read()
-      unsub = binding.session.subscribe(read)
+      const interaction = ctx.uiSession.pendingInteractions.getSnapshot().get(sessionId)
+      const isQuestion = interaction !== undefined && (interaction.kind === 'question' || interaction.kind === 'plan-review')
+      const question = isQuestion ? interaction : undefined
+      if (question === lastQuestion) return
+      lastQuestion = question
+      const questions = question?.questions ?? null
+      store.setMainQuestion(questions === null ? null : [...questions])
     }
-    follow()
-    const offList = ctx.sessions.list.subscribe(follow)
-    return () => { offList(); unsub?.() }
+    read()
+    const offPending = ctx.uiSession.pendingInteractions.subscribe(read)
+    const offList = ctx.sessions.list.subscribe(read)
+    return () => { offPending(); offList() }
   }, 'dsh-side-chat: track main question dialog')
 
   // Safety net: once the main conversation no longer has a pending question
@@ -1932,9 +1926,8 @@ export function apply(ctx: Context): void {
       if (store.getSnapshot().mainQuestion === null) return
       const sessionId = ctx.sessions.list.getSnapshot().current
       if (sessionId === undefined) return
-      const binding = ctx.sessions.binding(sessionId)
-      if (binding === undefined) return
-      const hasQuestion = binding.session.getSnapshot().pending.some((p) => p.kind === 'question')
+      const interaction = ctx.uiSession.pendingInteractions.getSnapshot().get(sessionId)
+      const hasQuestion = interaction !== undefined && (interaction.kind === 'question' || interaction.kind === 'plan-review')
       if (!hasQuestion) store.setMainQuestion(null)
     }, 1200)
     return () => { window.clearInterval(timer) }

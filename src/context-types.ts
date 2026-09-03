@@ -89,29 +89,24 @@ export interface SideQuestionItem {
   multiSelect?: boolean
 }
 
-/** A pending main-conversation interaction (question / approval dialog). */
+/** A pending main-conversation interaction (question / plan-review / approval dialog). */
 export interface SidePendingInteraction {
-  kind: 'approval' | 'question'
+  /** Presentation discriminator: the question family, or an approval. */
+  kind: 'question' | 'plan-review' | 'approval'
+  /** Opaque render identity and request key (e.g. `question:1`). */
   key: string
   sessionId: string
-  payload: { questions?: SideQuestionItem[] } & Record<string, unknown>
+  /** The request's question list (present for the question family). */
+  questions?: SideQuestionItem[]
 }
 
-/** The slice of the main session snapshot this plugin reads (pending interactions). */
-export interface SideSessionSnapshot {
-  pending: readonly SidePendingInteraction[]
+/** The per-session pending-interaction source exposed by the `uiSession` service. */
+export interface SidePendingInteractionStore {
+  getSnapshot(): ReadonlyMap<string, SidePendingInteraction>
+  subscribe(fn: () => void): () => void
 }
 
-/** The main-session binding face (id + conversation-snapshot observable). */
-export interface SideSessionBinding {
-  sessionId: string
-  session: {
-    getSnapshot(): SideSessionSnapshot
-    subscribe(fn: () => void): () => void
-  }
-}
-
-/** The client sessions service face (list feed + scope/binding resolution). */
+/** The client sessions service face (list feed + scope resolution). */
 export interface SideSessionsService {
   list: {
     getSnapshot(): SideSessionList
@@ -119,8 +114,12 @@ export interface SideSessionsService {
   }
   /** Resolve an Agent-scoped context view for a listed session id (use-and-discard). */
   scope(id: string): Context | undefined
-  /** Resolve the stable session binding (id + conversation snapshot observable). */
-  binding(id: string): SideSessionBinding | undefined
+}
+
+/** The client UI-session service face (per-session pending interactions). */
+export interface SideUiSessionService {
+  /** Per-session pending UI interaction (question / plan-review / approval). */
+  pendingInteractions: SidePendingInteractionStore
 }
 
 /** Agent options (provider/model/maxTokens). */
@@ -374,6 +373,7 @@ declare module 'cordis' {
     attachments: SideAttachmentStore
     commands: SideCommandsService
     conversation: SideConversationService
+    uiSession: SideUiSessionService
     inject(deps: string[], callback: (ctx: Context) => void): void
     get(name: string): unknown | undefined
     on(name: string, listener: (...args: any[]) => any): () => void
