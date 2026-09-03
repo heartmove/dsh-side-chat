@@ -147,6 +147,25 @@ DSH web loads external plugins from the active profile. This package is a
 That declaration is what lets `dsh plugin add` install the package *and*
 activate it in one step.
 
+> **Recommended: install from npm.** The package is published to
+> [npm](https://www.npmjs.com/package/dsh-side-chat-plus) as
+> `dsh-side-chat-plus`, so `dsh plugin add` needs no source checkout — the
+> tarball ships the prebuilt `lib/` and is activated in one go.
+
+### Install from npm
+
+The built package is published to npm as [`dsh-side-chat-plus`](https://www.npmjs.com/package/dsh-side-chat-plus). Installed from the registry, the tarball ships the prebuilt `lib/` (plus `cordis.patch.yml` and `dsh.plugin.json`), so no source build is needed:
+
+```bash
+npx -p @deepseek-ai/dsh dsh plugin --profile web add dsh-side-chat-plus
+```
+
+`dsh plugin` reconciles the bundle into the profile's `dsh.profile.bundles`
+layer list; the prebuilt `lib/` means nothing extra runs at install time.
+Version falls out of the tagged release (see [CI and publishing](#ci-and-publishing)).
+
+Restart `dsh web`, then hard-refresh the page (Ctrl/Cmd+Shift+R).
+
 ### Install from GitHub
 
 ```bash
@@ -175,22 +194,12 @@ silently change what runs.
 
 Restart `dsh web`, then hard-refresh the page (Ctrl/Cmd+Shift+R).
 
-### Install from npm
-
-The built package is published to npm as [`dsh-side-chat-plus`](https://www.npmjs.com/package/dsh-side-chat-plus). Installed from the registry, the tarball ships the prebuilt `lib/` (plus `cordis.patch.yml` and `dsh.plugin.json`), so no source build is needed:
-
-```bash
-npx -p @deepseek-ai/dsh dsh plugin --profile web add dsh-side-chat-plus
-```
-
-Version falls out of the tagged release (see below).
-
 ### Install from a local checkout
 
 From the directory that contains this checkout:
 
 ```bash
-npx -p @deepseek-ai/dsh dsh plugin --profile web add ./dsh-side-chat
+npx -p @deepseek-ai/dsh dsh plugin --profile web add ./dsh-side-chat-plus
 ```
 
 pnpm links the checkout and `dsh` activates the bundle the same way.

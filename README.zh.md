@@ -105,6 +105,24 @@ DSH web 从当前 profile 加载外部插件。本包是一个 **bundle**：它�
 其中的 `insert` 条目用于挂载插件。正是这个声明让 `dsh plugin add` 能一步完成
 「安装 + 激活」。
 
+> **推荐：从 npm 安装。** 本包已发布到 [npm](https://www.npmjs.com/package/dsh-side-chat-plus)，
+> 名为 `dsh-side-chat-plus`，因此 `dsh plugin add` 无需源码 checkout——tarball 自带预构建的
+> `lib/`，安装即激活。
+
+### 从 npm 安装
+
+构建好的包已发布到 npm，名为 [`dsh-side-chat-plus`](https://www.npmjs.com/package/dsh-side-chat-plus)。
+从 registry 安装时，tarball 自带预构建的 `lib/`（以及 `cordis.patch.yml`、`dsh.plugin.json`），无需源码构建：
+
+```bash
+npx -p @deepseek-ai/dsh dsh plugin --profile web add dsh-side-chat-plus
+```
+
+`dsh plugin` 会把 bundle 对账进该 profile 的 `dsh.profile.bundles` 层列表；预构建的 `lib/`
+意味着安装时无需额外运行任何构建。版本号随打出的 tag 确定（见 [CI 与发布](#ci-与发布)）。
+
+重启 `dsh web`，然后在浏览器中强制刷新页面（Ctrl/Cmd+Shift+R）。
+
 ### 从 GitHub 安装
 
 ```bash
@@ -131,23 +149,12 @@ allowBuilds:
 
 重启 `dsh web`，然后在浏览器中强制刷新页面（Ctrl/Cmd+Shift+R）。
 
-### 从 npm 安装
-
-构建好的包已发布到 npm，名为 [`dsh-side-chat-plus`](https://www.npmjs.com/package/dsh-side-chat-plus)。
-从 registry 安装时，tarball 自带预构建的 `lib/`（以及 `cordis.patch.yml`、`dsh.plugin.json`），无需源码构建：
-
-```bash
-npx -p @deepseek-ai/dsh dsh plugin --profile web add dsh-side-chat-plus
-```
-
-版本号随打出的 tag 确定（见下文发布说明）。
-
 ### 从本地 checkout 安装
 
 在包含本项目 checkout 的目录下执行：
 
 ```bash
-npx -p @deepseek-ai/dsh dsh plugin --profile web add ./dsh-side-chat
+npx -p @deepseek-ai/dsh dsh plugin --profile web add ./dsh-side-chat-plus
 ```
 
 pnpm 会链接该 checkout，`dsh` 以同样方式激活这个 bundle。
