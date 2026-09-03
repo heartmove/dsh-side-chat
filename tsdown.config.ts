@@ -5,10 +5,10 @@
  * install channel. Both client bundles compile from the same src/client/index.tsx
  * with only the registered id and output file name differing:
  *
- * - `lib/client.js` registers with the package-name id `dsh-side-chat`
+ * - `lib/client.js` registers with the package-name id `dsh-side-chat-plus`
  *   (client-modules compose keys on the package name),
  * - `lib/client-registry.js` registers with the manifest id
- *   `dsh-external/dsh-side-chat` (dsh.plugin.json `client.main`).
+ *   `dsh-external/dsh-side-chat-plus` (dsh.plugin.json `client.main`).
  *
  * Externals resolve through the loader module table at runtime (react, cordis,
  * and the DSH platform modules); everything else inlines. A purity gate
@@ -186,7 +186,7 @@ export default [
     clean: false,
   },
   // Official profile channel: bundle id = package name.
-  clientBundle('dsh-side-chat', 'client.js'),
+  clientBundle('dsh-side-chat-plus', 'client.js'),
   // Plugin-registry channel: bundle id = manifest id.
-  clientBundle('dsh-external/dsh-side-chat', 'client-registry.js'),
+  clientBundle('dsh-external/dsh-side-chat-plus', 'client-registry.js'),
 ] satisfies UserConfig[]

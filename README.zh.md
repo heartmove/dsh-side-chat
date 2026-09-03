@@ -79,6 +79,25 @@ pnpm build
 最后用 tsdown 打包出 host 端（`lib/index.js`）与 client 端
 （`lib/client.js` + `lib/client-registry.js`）。
 
+## CI 与发布
+
+[GitHub Actions](.github/workflows) 覆盖两条流水线：
+
+- **[`ci.yml`](.github/workflows/ci.yml)**：每次 push 到 `main` 及 pull request 时触发——
+  安装依赖、类型检查、构建、运行测试脚本，并在 Node 20 / 22 下打包 tarball（作为 artifact 上传）。
+- **[`publish.yml`](.github/workflows/publish.yml)**：推送 `v*` 标签时触发——构建并把包发布到
+  **npm**，即 [`dsh-side-chat-plus`](https://www.npmjs.com/package/dsh-side-chat-plus)，
+  用仓库的 `NPM_TOKEN` secret 鉴权。
+
+包名为 `dsh-side-chat-plus`（npm 上的裸名 `dsh-side-chat` 属于另一维护者，因此发布以 `-plus` 命名）。
+
+> **registry 依赖说明。** 本插件所依赖的 harness 包（DSH `0.1.2` 这一代 API）在 npm 上以预发布
+> （`0.1.2-rc.1`）发布，且个别包内部用普通 `>=0.1.2` 范围引用同系列包，npm/pnpm 不会把
+> 预发布版本当作满足该范围。因此开发用的 `pnpm-workspace.yaml` 把 `@deepseek-ai/dsh-*` 指向
+> 本地 harness checkout（绝对路径 `D:/code/...`，仅存在于维护者本机）。CI 会把该文件替换成
+> overrides 将每个 `@deepseek-ai/dsh-*` 依赖固定到 `0.1.2-rc.1` 的版本，从而让安装从 registry
+> 解析。在其他机器上，把 overrides 指向你自己的 harness 克隆，或直接以 CI 的 workspace 文件为模板。
+
 ## 部署
 
 DSH web 从当前 profile 加载外部插件。本包是一个 **bundle**：它的
@@ -89,7 +108,7 @@ DSH web 从当前 profile 加载外部插件。本包是一个 **bundle**：它�
 ### 从 GitHub 安装
 
 ```bash
-npx -p @deepseek-ai/dsh dsh plugin --profile web add github:heartmove/dsh-side-chat
+npx -p @deepseek-ai/dsh dsh plugin --profile web add github:heartmove/dsh-side-chat-plus
 ```
 
 `dsh plugin` 会把命令转发到 `~/.dsh/profiles/web/` 下的 pnpm，然后把 bundle
@@ -103,14 +122,25 @@ pnpm ≥ 10 在把 git 依赖加入白名单之前，会拒绝运行它的 `prep
 
 ```yaml
 allowBuilds:
-  dsh-side-chat: true
+  dsh-side-chat-plus: true
 ```
 
 然后重新执行 `add`。这个白名单意味着「允许该包的代码在安装时于本机运行」——
 只放行你信任其源码的包，并固定到某个 commit
-（`github:heartmove/dsh-side-chat#<sha>`），这样之后的推送无法悄悄改变实际运行的代码。
+（`github:heartmove/dsh-side-chat-plus#<sha>`），这样之后的推送无法悄悄改变实际运行的代码。
 
 重启 `dsh web`，然后在浏览器中强制刷新页面（Ctrl/Cmd+Shift+R）。
+
+### 从 npm 安装
+
+构建好的包已发布到 npm，名为 [`dsh-side-chat-plus`](https://www.npmjs.com/package/dsh-side-chat-plus)。
+从 registry 安装时，tarball 自带预构建的 `lib/`（以及 `cordis.patch.yml`、`dsh.plugin.json`），无需源码构建：
+
+```bash
+npx -p @deepseek-ai/dsh dsh plugin --profile web add dsh-side-chat-plus
+```
+
+版本号随打出的 tag 确定（见下文发布说明）。
 
 ### 从本地 checkout 安装
 
@@ -131,17 +161,17 @@ pnpm 会链接该 checkout，`dsh` 以同样方式激活这个 bundle。
 ```json
 {
   "dependencies": {
-    "dsh-side-chat": "link:D:\\path\\to\\dsh-side-chat"
+    "dsh-side-chat-plus": "link:D:\\path\\to\\dsh-side-chat-plus"
   },
   "dsh": {
     "profile": {
-      "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dsh-side-chat"]
+      "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dsh-side-chat-plus"]
     }
   }
 }
 ```
 
-（在 POSIX 系统上使用 `link:/path/to/dsh-side-chat`。）然后在 profile 目录执行
+（在 POSIX 系统上使用 `link:/path/to/dsh-side-chat-plus`。）然后在 profile 目录执行
 `pnpm install` 并重启 `dsh web`。
 
 ## 使用

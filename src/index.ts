@@ -31,7 +31,7 @@ import { isTrustedApiRequest } from './trust-fence.ts'
 import { optionalBoolean, readJsonBody, requireString, SidechatError, writeError, writeJson, writeOk } from './wire.ts'
 
 /** Plugin identity for cordis.yml rows. */
-export const name = 'dsh-side-chat'
+export const name = 'dsh-side-chat-plus'
 
 /** Services required before mounting. */
 export const inject = [

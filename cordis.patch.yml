@@ -4,5 +4,5 @@
 # `name` is the package name: the Loader resolves it from the profile's
 # node_modules (where pnpm installs the checkout / git dependency).
 - insert:
-    - id: dsh-side-chat
-      name: dsh-side-chat
+    - id: dsh-side-chat-plus
+      name: dsh-side-chat-plus

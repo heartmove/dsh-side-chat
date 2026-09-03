@@ -1,6 +1,6 @@
 {
-  "id": "dsh-external/dsh-side-chat",
-  "version": "0.3.0",
+  "id": "dsh-external/dsh-side-chat-plus",
+  "version": "0.3.1",
   "main": "./lib/index.js",
   "description": "选中对话内容 → 在侧边聊天中提问：按主会话隔离的隐藏普通会话，继承模型/思考难度/权限（可调），带「需要时查工作区/主会话」开关。",
   "engines": {
