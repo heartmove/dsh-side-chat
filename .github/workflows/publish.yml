@@ -87,8 +87,15 @@ jobs:
 
       - name: Sync version
         run: |
-          pnpm version ${{ steps.version.outputs.version }} --no-git-tag-version
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));const m=JSON.parse(fs.readFileSync('dsh.plugin.json','utf8'));m.version=p.version;fs.writeFileSync('dsh.plugin.json',JSON.stringify(m,null,2)+'\n')"
+          node -e "
+            const fs=require('fs');
+            const tag='${{ steps.version.outputs.version }}';
+            const p=JSON.parse(fs.readFileSync('package.json','utf8'));
+            const m=JSON.parse(fs.readFileSync('dsh.plugin.json','utf8'));
+            p.version=tag; m.version=tag;
+            fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');
+            fs.writeFileSync('dsh.plugin.json',JSON.stringify(m,null,2)+'\n');
+          "
 
       - name: Publish to npm
         run: pnpm publish --no-git-checks --access public --provenance
