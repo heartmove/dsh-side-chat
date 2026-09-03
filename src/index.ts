@@ -472,14 +472,22 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
     const items: Array<{ childId: string; running: boolean; runningSince?: number }> = []
     for (const record of sideChats.values()) {
       if (record.parentSessionId !== parentSessionId) continue
-      // "Running" is decided by an open turn in the session log — the same
-      // signal the main conversation uses — instead of the agent status getter,
-      // so a turn that already settled can never leave the panel stuck on
-      // "thinking".
-      const runningSince = openTurnStart(record.handle.agent.session.events ?? [])
+      const agent = record.handle.agent
+      // "Running" follows the agent's live lifecycle status — the dominant
+      // signal the main conversation uses — so the composer flips to the stop
+      // button the moment the driver wakes for thinking/streaming, instead of
+      // waiting for a durable turn/start to land in the log. A settled driver
+      // is always 'idle' again, so a finished turn can never leave the panel
+      // stuck on "thinking". Hosts that do not surface the status getter fall
+      // back to the open-turn event scan.
+      const status = (agent as { status?: string }).status
+      const statusRunning = status === 'running'
+      const eventRunningSince = openTurnStart(agent.session.events ?? [])
+      const running = statusRunning || (status === undefined && eventRunningSince !== undefined)
+      const runningSince = running ? (eventRunningSince ?? Date.now()) : undefined
       items.push({
         childId: record.childId,
-        running: runningSince !== undefined,
+        running,
         ...(runningSince !== undefined ? { runningSince } : {}),
       })
     }
