@@ -56,6 +56,25 @@
   font-family: var(--dsw-font-family);
   font-size: 14px;
   pointer-events: auto;
+  transition: transform var(--ds-transition-duration-slow) var(--ds-ease-in-out);
+}
+
+/* Embedded in the built-in right sidebar (dock mode): fill the tab pane,
+   drop the floating chrome (fixed positioning, resize rail, own border). */
+.panelEmbedded {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  border-left: none;
+  border-radius: 0;
+}
+
+/* A built-in sidebar overlay (fullscreen preview / floated panel) owns the
+   viewport: slide this panel out of the way; the layout margin is dropped by
+   the matching width effect so the main column reclaims the space. */
+.panelConflictHidden {
+  transform: translateX(calc(100% + 24px));
+  pointer-events: none;
 }
 
 .panelResize {

@@ -12,6 +12,9 @@ export const SUBCHAT_PREFS_NS = 'dsh-side-chat'
 /** How a brought-back reply lands in the main conversation. */
 export type BringMode = 'draft' | 'context'
 
+/** Where the side-chat panel lives when a side chat is open. */
+export type PanelHome = 'floating' | 'sidebar-right'
+
 /** User-facing side-chat preferences. */
 export interface SubchatPrefs {
   /** Whether the "look up workspace / parent when needed" switch defaults on. */
@@ -22,6 +25,8 @@ export interface SubchatPrefs {
   defaultPrompt: string
   /** How brought-back content lands: into the composer draft, or as a collapsed context row. */
   bringMode: BringMode
+  /** Which container hosts the panel: the classic floating right-edge panel, or the new built-in right sidebar. */
+  panelHome: PanelHome
 }
 
 /** Fallback prefs used whenever the settings document is unreachable or malformed. */
@@ -30,4 +35,5 @@ export const SUBCHAT_PREFS_DEFAULTS: SubchatPrefs = {
   sendImmediately: true,
   defaultPrompt: '',
   bringMode: 'draft',
+  panelHome: 'sidebar-right',
 }

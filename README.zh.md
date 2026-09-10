@@ -240,6 +240,7 @@ pnpm 会链接该 checkout，`dsh` 以同样方式激活这个 bundle。
 | `sendImmediately` | 开 | 选中内容后立即发送，还是先作为附件放入输入框。 |
 | `defaultPrompt` | *（空）* | 「立即发送」开启时，附加在选中内容后的额外提示词。 |
 | `bringMode` | `draft` | 带回内容的落地方式：`draft` 写入输入框草稿，`context` 注入为折叠提示行。 |
+| `panelHome` | `sidebar-right` | 侧边聊天的宿主：`sidebar-right` 停靠到新版右侧栏（作为「侧边聊天」标签，与文档预览共用同一边栏，默认），`floating` 经典浮动面板（可拖拽调宽）。浮动模式下，内置右侧栏打开（停靠/全屏/浮动）时侧聊会自动让位，避免互相遮挡。 |
 
 偏好设置保存在 DSH 设置命名空间 `dsh-side-chat` 下。
 

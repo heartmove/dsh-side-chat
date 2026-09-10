@@ -181,12 +181,24 @@ function openTurnStart(events: readonly SideSessionEvent[]): number | undefined 
   return lastStart
 }
 
+/**
+ * Read a session's event log across DSH versions: 0.1.5+ exposes
+ * `snapshotEvents()`; 0.1.2-era sessions carried a plain `events` getter.
+ */
+function sessionEvents(session: SideSession): readonly SideSessionEvent[] {
+  if (typeof session.snapshotEvents === 'function') {
+    return session.snapshotEvents()
+  }
+  return session.events ?? []
+}
+
 /** Schemastery schema for the user-facing preferences (validated by the settings service). */
 const PrefsSchema: z<SubchatPrefs> = z.object({
   lookupDefault: z.boolean().default(SUBCHAT_PREFS_DEFAULTS.lookupDefault),
   sendImmediately: z.boolean().default(SUBCHAT_PREFS_DEFAULTS.sendImmediately),
   defaultPrompt: z.string().default(SUBCHAT_PREFS_DEFAULTS.defaultPrompt),
   bringMode: z.union(['draft', 'context']).default(SUBCHAT_PREFS_DEFAULTS.bringMode),
+  panelHome: z.union(['floating', 'sidebar-right']).default(SUBCHAT_PREFS_DEFAULTS.panelHome),
 })
 
 /** Live settings face (bound when the settings service is mounted). */
@@ -311,7 +323,7 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
     const childId = requireString(payload, 'childId')
     const line = requireString(payload, 'line')
     const child = childOf(childId)
-    const result = await ctx.commands.execute(child, line, new AbortController().signal)
+    const result = await ctx.commands.execute(child, line, [], new AbortController().signal)
     return { executed: result !== undefined }
   }
 
@@ -319,7 +331,7 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
   const state = (payload: unknown): { plan: { active: boolean; pending: boolean }; goal: { id: string; objective: string } | null } => {
     const childId = requireString(payload, 'childId')
     const child = childOf(childId)
-    const events = child.session.events ?? []
+    const events = sessionEvents(child.session)
     // Plan fold mirrors dsh-plan-mode's `plan` projection.
     let planActive = false
     let planWanted: boolean | null = null
@@ -431,7 +443,7 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
       // Client-supplied preset wins; otherwise inherit the launching
       // conversation's permission preset (skip custom).
       const explicitPreset = typeof record.preset === 'string' && record.preset !== '' ? record.preset : undefined
-      const parentPreset = ctx.permissionPresets.current(parent.session.events ?? [])
+      const parentPreset = ctx.permissionPresets.current(parent.session)
       const preset = explicitPreset ?? parentPreset
       if (preset !== 'custom') {
         ctx.permissionPresets.set(handle.agent.session, preset)
@@ -482,7 +494,7 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
       // back to the open-turn event scan.
       const status = (agent as { status?: string }).status
       const statusRunning = status === 'running'
-      const eventRunningSince = openTurnStart(agent.session.events ?? [])
+      const eventRunningSince = openTurnStart(sessionEvents(agent.session))
       const running = statusRunning || (status === undefined && eventRunningSince !== undefined)
       const runningSince = running ? (eventRunningSince ?? Date.now()) : undefined
       items.push({

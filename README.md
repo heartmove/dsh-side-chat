@@ -298,6 +298,7 @@ Open DSH **Settings → 侧边聊天 (Side chat)** to configure:
 | `sendImmediately` | on | Whether selecting text sends it immediately, or stages it as an attachment. |
 | `defaultPrompt` | *(empty)* | Extra prompt appended when the selection is sent immediately. |
 | `bringMode` | `draft` | Where brought-back content lands: `draft` into the composer, or `context` as a collapsed context row. |
+| `panelHome` | `sidebar-right` | Where the panel lives: `sidebar-right` docks it into the new built-in right sidebar as a "Side chat" tab (same rail as document previews, default); `floating` is the classic drag-resizable right-edge panel. In floating mode the side chat yields automatically while the built-in sidebar is open (docked, fullscreen or floated), so the two never cover each other. |
 
 Preferences are stored in the DSH settings namespace `dsh-side-chat`.
 

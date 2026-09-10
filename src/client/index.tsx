@@ -28,7 +28,7 @@ import {
   ImageLightbox,
   type ImageLoader,
 } from './attachments/index.ts'
-import type { Context, SideQuestionItem, SideQuestionOption } from '../context-types.ts'
+import type { Context, SideQuestionItem, SideQuestionOption, SideSidebarRight } from '../context-types.ts'
 import {
   api,
   type PromptContentPart,
@@ -104,6 +104,8 @@ interface SidechatStore {
   dismissAllQuestions(ids: string[]): void
   openPanel(parentSessionId: string): void
   closePanel(): void
+  /** Install (or clear) the dock-mode launcher; openPanel() fires it after opening. */
+  setDockLaunch(fn: (() => void) | null): void
   setActive(childId: string): void
   patch(partial: Partial<PanelState>): void
 }
@@ -146,6 +148,9 @@ function createStore(): SidechatStore {
   // the client must remember each conversation's open panel + active child.
   const bySession = new Map<string, PanelState>()
   const listeners = new Set<() => void>()
+  // Dock mode: while the panel lives in the built-in right sidebar, opening the
+  // panel also reveals the tab (registered by the dock effect; null otherwise).
+  let dockLaunch: (() => void) | null = null
   // Cached snapshot: useSyncExternalStore compares identity, so the object is
   // only rebuilt on a mutation — never inside getSnapshot itself.
   let snapshot: SidechatSnapshot = { current, panel, anchor, prefs, mainQuestion, dismissedQuestionIds }
@@ -199,11 +204,15 @@ function createStore(): SidechatStore {
     },
     openPanel(parentSessionId) {
       panel = { ...panel, open: true, parentSessionId }
+      dockLaunch?.()
       notify()
     },
     closePanel() {
       panel = { ...panel, open: false }
       notify()
+    },
+    setDockLaunch(fn) {
+      dockLaunch = fn
     },
     setActive(childId) {
       panel = { ...panel, activeChildId: childId, messages: [], error: null }
@@ -873,6 +882,10 @@ const MAIN_CHAT_MIN_WIDTH = 480
 /** localStorage key remembering the last panel width across reloads. */
 const PANEL_WIDTH_KEY = 'dsh-side-chat.panelWidth'
 
+/** Right-sidebar dock identity (kind is the `openTab` discriminator; id keys the body seat). */
+const SIDEBAR_TAB_ID = 'dsh-side-chat-plus/side-chat'
+const SIDEBAR_TAB_KIND = 'side-chat'
+
 /** The viewport-aware maximum panel width for the current window. */
 function panelCap(): number {
   const vw = window.innerWidth
@@ -900,6 +913,10 @@ function SidechatPanel(props: {
   summarizeBring: (text: string) => Promise<boolean>
   askSidechat: (text: string) => Promise<boolean>
   askSidechatNew: (text: string) => Promise<boolean>
+  /** Render inside the built-in right sidebar's tab pane (no floating chrome). */
+  embedded?: boolean
+  /** A built-in sidebar overlay (fullscreen preview / floating panel) owns the viewport: hide this panel. */
+  conflictHidden?: boolean
 }) {
   const { panel, mainQuestion, dismissedQuestionIds } = useSyncExternalStore(props.store.subscribe, props.store.getSnapshot)
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -997,10 +1014,11 @@ function SidechatPanel(props: {
   const [anchor, setAnchor] = useState<number | null>(null)
 
   useEffect(() => {
-    const w = panel.open && !collapsed ? `${width}px` : '0px'
+    if (props.embedded) return
+    const w = panel.open && !collapsed && !props.conflictHidden ? `${width}px` : '0px'
     document.documentElement.style.setProperty('--dsh-subchat-width', w)
     return () => { document.documentElement.style.setProperty('--dsh-subchat-width', '0px') }
-  }, [panel.open, collapsed, width])
+  }, [props.embedded, panel.open, collapsed, width, props.conflictHidden])
 
   // Re-adapt the panel width when the window is resized: if the viewport
   // shrinks (smaller window, different monitor, higher zoom), the panel is
@@ -1287,46 +1305,55 @@ function SidechatPanel(props: {
     return base64ObjectUrl(result.value.mediaType, result.value.data)
   }, [panel.activeChildId])
 
-  if (!panel.open) {
-    // Panel closed but the main conversation has a pending question dialog:
-    // show a floating entry anchored beside the dialog header.
-    if (mainQuestion !== null) {
-      return <QuestionFab store={props.store} t={props.t} onOpen={openQuestionPanel} />
-    }
-    return null
-  }
+  // The pending-question entry floats in the portal (SideChatShell), where it is
+  // mounted in both modes; only the floating-mode collapsed handle still lives
+  // here, next to the collapsed state it belongs to.
+  if (!props.embedded) {
+    if (!panel.open) return null
 
-  if (collapsed) {
-    // Collapsed but a question dialog is pending: keep the floating entry so it
-    // can still be opened from beside the dialog (not just the collapsed handle).
-    if (mainQuestion !== null) {
-      return <QuestionFab store={props.store} t={props.t} onOpen={openQuestionPanel} />
+    if (collapsed) {
+      // Collapsed but a question dialog is pending: keep the floating entry so it
+      // can still be opened from beside the dialog (not just the collapsed handle).
+      if (mainQuestion !== null) {
+        return <QuestionFab store={props.store} t={props.t} onOpen={openQuestionPanel} />
+      }
+      // Collapsed handle: a floating round button on the right edge.
+      return (
+        <Tooltip label={props.t('panel.expand')} side="bottom">
+          <button type="button" className={css.collapsedHandle} onClick={() => { setCollapsed(false) }}>
+            <IconPanelLeftOutline16 size={16} />
+          </button>
+        </Tooltip>
+      )
     }
-    return (
-      <Tooltip label={props.t('panel.expand')} side="bottom">
-        <button type="button" className={css.collapsedHandle} onClick={() => { setCollapsed(false) }}>
-          <IconPanelLeftOutline16 size={16} />
-        </button>
-      </Tooltip>
-    )
   }
 
   const elapsedMs = anchor === null ? 0 : Math.max(0, now - anchor)
   const showClock = elapsedMs >= 15000
 
+  const panelClass = props.embedded
+    ? `${css.panel} ${css.panelEmbedded}`
+    : `${css.panel}${props.conflictHidden ? ` ${css.panelConflictHidden}` : ''}`
+
   return (
-    <div className={css.panel} style={{ width }}>
-      <div className={css.panelResize} onMouseDown={startResize} />
-      <div className={css.panelHeader}>
-        <span className={css.panelTitle}>{props.t('panel.title')}</span>
-        <div className={css.panelHeaderActions}>
-          <Tooltip label={props.t('panel.collapse')} side="bottom">
-            <button type="button" className={css.panelIconButton} onClick={() => { setCollapsed(true) }}>
-              <IconPanelLeftOutline16 size={16} />
-            </button>
-          </Tooltip>
+    <div
+      className={panelClass}
+      style={props.embedded ? undefined : { width }}
+      data-sidechat-panel={props.embedded ? 'embedded' : 'floating'}
+    >
+      {!props.embedded && <div className={css.panelResize} onMouseDown={startResize} />}
+      {!props.embedded && (
+        <div className={css.panelHeader}>
+          <span className={css.panelTitle}>{props.t('panel.title')}</span>
+          <div className={css.panelHeaderActions}>
+            <Tooltip label={props.t('panel.collapse')} side="bottom">
+              <button type="button" className={css.panelIconButton} onClick={() => { setCollapsed(true) }}>
+                <IconPanelLeftOutline16 size={16} />
+              </button>
+            </Tooltip>
+          </div>
         </div>
-      </div>
+      )}
 
       {mainQuestion !== null && (() => {
         const visible = mainQuestion.filter((q) => !dismissedQuestionIds.includes(q.id))
@@ -1609,6 +1636,110 @@ function SidechatPanel(props: {
 }
 
 /** The "Side chat" settings section (two switches + a prompt textarea). */
+/** Dock-mode body: the side-chat panel embedded in the built-in right sidebar's tab pane. */
+function EmbeddedSidechatPanel(props: {
+  store: SidechatStore
+  t: (key: SidechatLocaleKey) => string
+  formatDuration: (ms: number) => string
+  bringToMain: (text: string) => Promise<boolean>
+  summarizeBring: (text: string) => Promise<boolean>
+  askSidechat: (text: string) => Promise<boolean>
+  askSidechatNew: (text: string) => Promise<boolean>
+}) {
+  // The tab seat only mounts for the current session, so the shared store's
+  // current-conversation state is the right one to draw.
+  return (
+    <SidechatPanel
+      embedded
+      store={props.store}
+      t={props.t}
+      formatDuration={props.formatDuration}
+      bringToMain={props.bringToMain}
+      summarizeBring={props.summarizeBring}
+      askSidechat={props.askSidechat}
+      askSidechatNew={props.askSidechatNew}
+    />
+  )
+}
+
+/** The portalled shell: floating menus + the panel, switching on prefs.panelHome. */
+function SideChatShell(props: {
+  store: SidechatStore
+  t: (key: SidechatLocaleKey) => string
+  formatDuration: (ms: number) => string
+  bringToMain: (text: string) => Promise<boolean>
+  summarizeBring: (text: string) => Promise<boolean>
+  askSidechat: (text: string) => Promise<boolean>
+  askSidechatNew: (text: string) => Promise<boolean>
+}) {
+  const snap = useSyncExternalStore(props.store.subscribe, props.store.getSnapshot)
+  const [builtinOverlay, setBuiltinOverlay] = useState(false)
+
+  // While the built-in right sidebar actually shows its panel (docked, fullscreen
+  // or a floated pane), the floating side-chat panel would sit on top of it: yield
+  // — slide the side chat away and drop its layout margin until the built-in panel
+  // is closed again. Docked mode shares the sidebar instead, so it never needs
+  // this guard.
+  useEffect(() => {
+    const probe = (): boolean => {
+      if (document.querySelector('[data-sidebar-right-panel][data-sidebar-right-open]') !== null) return true
+      const floatHost = document.querySelector('[data-sidebar-right-float-host]')
+      if (floatHost !== null && floatHost.childElementCount > 0) return true
+      return false
+    }
+    let active = probe()
+    const apply = (): void => {
+      const next = probe()
+      if (next !== active) {
+        active = next
+        setBuiltinOverlay(next)
+      }
+    }
+    apply()
+    const observer = new MutationObserver(apply)
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['data-sidebar-right-open', 'data-sidebar-right-panel', 'data-sidebar-right-float-host'],
+    })
+    window.addEventListener('resize', apply)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', apply)
+    }
+  }, [])
+
+  return (
+    <>
+      <SelectionMenu store={props.store} t={props.t} />
+      <BringBackMenu store={props.store} t={props.t} bringToMain={props.bringToMain} summarizeBring={props.summarizeBring} />
+      {/* The pending-question entry floats in the portal, not inside the panel:
+          in dock mode the panel (and its tab body) does not exist until the tab
+          was opened at least once, but the entry must appear regardless. */}
+      {snap.mainQuestion !== null && !snap.panel.open && (
+        <QuestionFab
+          store={props.store}
+          t={props.t}
+          onOpen={() => { props.store.openPanel(snap.panel.parentSessionId) }}
+        />
+      )}
+      {snap.prefs.panelHome === 'floating' && (
+        <SidechatPanel
+          store={props.store}
+          t={props.t}
+          formatDuration={props.formatDuration}
+          bringToMain={props.bringToMain}
+          summarizeBring={props.summarizeBring}
+          askSidechat={props.askSidechat}
+          askSidechatNew={props.askSidechatNew}
+          conflictHidden={builtinOverlay}
+        />
+      )}
+    </>
+  )
+}
+
 function SettingsSection(props: { store: SidechatStore; t: (key: SidechatLocaleKey) => string }) {
   const { store, t } = props
   const { prefs } = useSyncExternalStore(store.subscribe, store.getSnapshot)
@@ -1690,6 +1821,40 @@ function SettingsSection(props: { store: SidechatStore; t: (key: SidechatLocaleK
           <span className={css.settingsRowText}>
             <span className={css.settingsRowTitle}>{t('settings.bringModeContextTitle')}</span>
             <span className={css.settingsRowDesc}>{t('settings.bringModeContextDesc')}</span>
+          </span>
+        </label>
+      </div>
+      <div className={css.settingsRow}>
+        <span className={css.settingsRowText}>
+          <span className={css.settingsRowTitle}>{t('settings.panelHomeTitle')}</span>
+          <span className={css.settingsRowDesc}>{t('settings.panelHomeDesc')}</span>
+        </span>
+      </div>
+      <div className={css.settingsBringMode}>
+        <label className={`${css.settingsBringOption} ${prefs.panelHome === 'floating' ? css.settingsBringOptionActive : ''}`}>
+          <input
+            type="radio"
+            name="dsh-side-chat-panel-home"
+            className={css.settingsToggle}
+            checked={prefs.panelHome === 'floating'}
+            onChange={() => { toggle({ panelHome: 'floating' }) }}
+          />
+          <span className={css.settingsRowText}>
+            <span className={css.settingsRowTitle}>{t('settings.panelHomeFloatingTitle')}</span>
+            <span className={css.settingsRowDesc}>{t('settings.panelHomeFloatingDesc')}</span>
+          </span>
+        </label>
+        <label className={`${css.settingsBringOption} ${prefs.panelHome === 'sidebar-right' ? css.settingsBringOptionActive : ''}`}>
+          <input
+            type="radio"
+            name="dsh-side-chat-panel-home"
+            className={css.settingsToggle}
+            checked={prefs.panelHome === 'sidebar-right'}
+            onChange={() => { toggle({ panelHome: 'sidebar-right' }) }}
+          />
+          <span className={css.settingsRowText}>
+            <span className={css.settingsRowTitle}>{t('settings.panelHomeDockTitle')}</span>
+            <span className={css.settingsRowDesc}>{t('settings.panelHomeDockDesc')}</span>
           </span>
         </label>
       </div>
@@ -1869,6 +2034,7 @@ export function apply(ctx: Context): void {
       sendImmediately: typeof raw.sendImmediately === 'boolean' ? raw.sendImmediately : SUBCHAT_PREFS_DEFAULTS.sendImmediately,
       defaultPrompt: typeof raw.defaultPrompt === 'string' ? raw.defaultPrompt : SUBCHAT_PREFS_DEFAULTS.defaultPrompt,
       bringMode: raw.bringMode === 'context' ? 'context' : 'draft',
+      panelHome: raw.panelHome === 'floating' ? 'floating' : 'sidebar-right',
     })
   })
 
@@ -1933,8 +2099,82 @@ export function apply(ctx: Context): void {
     return () => { window.clearInterval(timer) }
   }, 'dsh-side-chat: clear stale question dialog')
 
+  // Optional dock mode: live inside the new built-in right sidebar
+  // (dsh-client-ui-sidebar-right) as a "Side chat" tab instead of the floating
+  // panel. Registered on demand; falls back to floating when the service is
+  // absent (older deployments) without ever failing to mount.
+  ctx.effect(() => {
+    let cleanup: (() => void) | undefined
+    // Explicit phase machine: sync() runs on every store notify, and patching
+    // the store from inside sync() must never re-enter registration work.
+    let phase: 'idle' | 'docked' | 'unavailable' = 'idle'
+
+    const sync = (): void => {
+      const docked = store.getSnapshot().prefs.panelHome === 'sidebar-right'
+      if (docked) {
+        if (phase === 'docked' || phase === 'unavailable') return
+        const sidebarRight = ctx.get('sidebarRight') as SideSidebarRight | undefined
+        if (sidebarRight === undefined) {
+          phase = 'unavailable'
+          store.patch({ error: translate(activeLocale, 'dock.unavailable') })
+          return
+        }
+        const dockT = (key: SidechatLocaleKey): string => translate(activeLocale, key)
+
+        const disposeType = sidebarRight.tabs.register({
+          id: SIDEBAR_TAB_ID,
+          kind: SIDEBAR_TAB_KIND,
+          priority: 'extension',
+          title: () => dockT('dock.title'),
+        })
+        // Body seat: rendered for the committed tab whose type id matches `key`.
+        const disposeBody = ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({
+          name: 'sidebar.right.pane.tab',
+          key: SIDEBAR_TAB_ID,
+          inject: () => ({
+            store,
+            t: dockT,
+            formatDuration,
+            bringToMain,
+            summarizeBring,
+            askSidechat,
+            askSidechatNew,
+          }),
+        }, EmbeddedSidechatPanel))
+        const launch = (): void => {
+          try {
+            sidebarRight.openTab(SIDEBAR_TAB_KIND, { revealIfOpened: true })
+          } catch (error) {
+            store.patch({ error: `${translate(activeLocale, 'dock.openFailed')}: ${error instanceof Error ? error.message : String(error)}` })
+          }
+        }
+        store.setDockLaunch(launch)
+        cleanup = () => {
+          store.setDockLaunch(null)
+          disposeBody()
+          disposeType()
+        }
+        phase = 'docked'
+        return
+      }
+      if (phase === 'idle') return
+      phase = 'idle'
+      store.setDockLaunch(null)
+      cleanup?.()
+      cleanup = undefined
+    }
+
+    sync()
+    const off = store.subscribe(sync)
+    return () => {
+      off()
+      cleanup?.()
+    }
+  }, 'dsh-side-chat: right-sidebar dock')
+
   // The "Side chat" settings section.
   const settingsT = (key: SidechatLocaleKey): string => translate(activeLocale, key)
+  const formatDuration = (ms: number): string => formatRunDuration(ms, activeLocale)
   ctx.slots.inject('settings.section', () => ctx.slots.register({
     name: 'settings.section',
     id: 'dsh-side-chat',
@@ -1951,12 +2191,15 @@ export function apply(ctx: Context): void {
     const root = createRoot(host)
 
     const t = (key: SidechatLocaleKey): string => translate(activeLocale, key)
-    const formatDuration = (ms: number): string => formatRunDuration(ms, activeLocale)
-    root.render(<>
-      <SelectionMenu store={store} t={t} />
-      <BringBackMenu store={store} t={t} bringToMain={bringToMain} summarizeBring={summarizeBring} />
-      <SidechatPanel store={store} t={t} formatDuration={formatDuration} bringToMain={bringToMain} summarizeBring={summarizeBring} askSidechat={askSidechat} askSidechatNew={askSidechatNew} />
-    </>)
+    root.render(<SideChatShell
+      store={store}
+      t={t}
+      formatDuration={formatDuration}
+      bringToMain={bringToMain}
+      summarizeBring={summarizeBring}
+      askSidechat={askSidechat}
+      askSidechatNew={askSidechatNew}
+    />)
 
     return () => {
       root.unmount()

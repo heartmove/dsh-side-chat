@@ -47,7 +47,13 @@ export interface SideSessionEvent {
 export interface SideSession {
   id: string
   header: SideSessionHeader
+  /**
+   * 0.1.2-era event getter. Removed in 0.1.5 (snapshotEvents takes over), so
+   * host code reads through `sessionEvents()` which prefers the new method.
+   */
   events?: readonly SideSessionEvent[]
+  /** 0.1.5+ snapshot of the full event log; absent on 0.1.2-era sessions. */
+  snapshotEvents?: (fromSeq?: number, toSeqExclusive?: number) => readonly SideSessionEvent[]
   requestHeader?: () => { config?: { provider?: string; model?: string; reasoningEffort?: string; maxTokens?: number } } | undefined
 }
 
@@ -221,9 +227,9 @@ export interface SidePresetOption {
   description?: string
 }
 
-/** The permission presets face. */
+/** The permission presets face (`current` reads the SESSION, not event rows). */
 export interface SidePermissionPresets {
-  current(events: readonly SideSessionEvent[]): string
+  current(session: SideSession): string
   set(session: SideSession, name: string): void
   selectFor(state: unknown): { options: SidePresetOption[]; currentValue: string }
 }
@@ -304,8 +310,33 @@ export interface SideSettingsService {
 
 /** The client slots service face (settings.section registration). */
 export interface SideSlotsService {
-  inject(name: string, factory: () => () => void): void
+  inject(name: string, factory: () => () => void): () => void
   register(options: Record<string, unknown>, component: unknown): () => void
+}
+
+/** One right-sidebar tab type definition (dsh-client-ui-sidebar-right contract, mirror). */
+export interface SideTabDefinition {
+  /** Stable unique key; the body seat entry registers under the same key. */
+  id: string
+  /** Discriminator used by `openTab(kind)` and the pane dispatch. */
+  kind: string
+  /** Registry band ('builtin' | 'extension' | 'fallback'); defaults to the extension band. */
+  priority?: string
+  /** Fresh title for the tab chip captured at open time. */
+  title(address: string): string
+}
+
+/** The right-sidebar tab-type registry face (`ctx.sidebarRight.tabs`). */
+export interface SideSidebarRightTabs {
+  /** Register a tab type; returns a disposer (hold it in the caller's ctx.effect). */
+  register(definition: SideTabDefinition): () => void
+}
+
+/** The cross-plugin right-sidebar face (`ctx.sidebarRight`, ui-sidebar-right). */
+export interface SideSidebarRight {
+  tabs: SideSidebarRightTabs
+  /** Open a page type by kind in the mounted session; reveals the column. */
+  openTab(kind: string, options?: { paneId?: string; replaceTab?: boolean; revealIfOpened?: boolean }): void
 }
 
 /** One durable image reference (mirror of ImageAttachmentRef). */
@@ -335,7 +366,7 @@ export interface SideAttachmentStore {
 /** The host command registry face (`ctx.commands`). */
 export interface SideCommandsService {
   list(agent: SideAgent): Array<{ name: string; description: string }>
-  execute(agent: SideAgent, line: string, signal: AbortSignal): Promise<unknown>
+  execute(agent: SideAgent, line: string, submittedAttachments: readonly unknown[], signal: AbortSignal): Promise<unknown>
 }
 
 /** The per-session composer input face this plugin writes to (draft-only). */
