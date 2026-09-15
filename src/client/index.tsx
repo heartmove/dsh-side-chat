@@ -14,7 +14,7 @@ import {
   IconChevronDownOutline14,
   IconChevronRightOutline14,
   IconPanelLeftOutline16,
-  IconSendOutline16,
+  IconSendOutline14,
   IconStopFill16,
   IconThinkOutline14,
   MarkdownText,
@@ -262,6 +262,22 @@ function createDraftImages(files: readonly File[]): ComposerAttachment[] {
     }
     return { id: crypto.randomUUID(), file, previewUrl: URL.createObjectURL(file) }
   })
+}
+
+/**
+ * Read one image file's intrinsic pixel size, releasing the decoded bitmap.
+ * Returns null when the browser cannot decode it: the host's `validateImage`
+ * stays the authority either way.
+ */
+async function imageSize(file: File): Promise<{ width: number; height: number } | null> {
+  try {
+    const bitmap = await createImageBitmap(file)
+    const size = { width: bitmap.width, height: bitmap.height }
+    bitmap.close()
+    return size
+  } catch {
+    return null
+  }
 }
 
 /** Revoke one draft image's preview URL. */
@@ -952,7 +968,7 @@ function SidechatPanel(props: {
   const [now, setNow] = useState(() => Date.now())
   const [dragActive, setDragActive] = useState(false)
   const [lightbox, setLightbox] = useState<ComposerAttachment | null>(null)
-  const [limits, setLimits] = useState<{ mediaTypes: string[]; maxImageBytes: number; maxImagesPerMessage: number; maxMessageImageBytes: number } | null>(null)
+  const [limits, setLimits] = useState<{ mediaTypes: string[]; maxImageBytes: number; maxImagesPerMessage: number; maxMessageImageBytes: number; maxImagePixels: number; maxImageDimension?: number } | null>(null)
   /** Index of the assistant message whose "summarize then insert" is in flight. */
   const [summarizingIndex, setSummarizingIndex] = useState<number | null>(null)
   /** Which question-dialog item is being brought into the side chat ('all' or an option label). */
@@ -1214,26 +1230,41 @@ function SidechatPanel(props: {
       props.store.patch({ error: props.t('image.unsupported') })
       return
     }
-    try {
-      if (limits !== null) {
-        if (images.some((f) => !limits.mediaTypes.includes(f.type))) {
-          props.store.patch({ error: props.t('image.unsupported') })
-          return
+    void (async () => {
+      try {
+        if (limits !== null) {
+          if (images.some((f) => !limits.mediaTypes.includes(f.type))) {
+            props.store.patch({ error: props.t('image.unsupported') })
+            return
+          }
+          if (panel.attachments.length + images.length > limits.maxImagesPerMessage) {
+            props.store.patch({ error: props.t('image.tooMany') })
+            return
+          }
+          if (images.some((f) => f.size > limits.maxImageBytes)) {
+            props.store.patch({ error: props.t('image.fileTooLarge') })
+            return
+          }
+          // DSH 0.1.6 added a per-image intrinsic width/height ceiling; older
+          // lines omit it. Decoding is async, so this check is awaited rather
+          // than folded into the size-type ones above.
+          const maxDimension = limits.maxImageDimension
+          if (typeof maxDimension === 'number' && maxDimension > 0) {
+            for (const file of images) {
+              const size = await imageSize(file)
+              if (size !== null && (size.width > maxDimension || size.height > maxDimension)) {
+                props.store.patch({ error: props.t('image.dimensionTooLarge') })
+                return
+              }
+            }
+          }
         }
-        if (panel.attachments.length + images.length > limits.maxImagesPerMessage) {
-          props.store.patch({ error: props.t('image.tooMany') })
-          return
-        }
-        if (images.some((f) => f.size > limits.maxImageBytes)) {
-          props.store.patch({ error: props.t('image.fileTooLarge') })
-          return
-        }
+        const created = createDraftImages(images)
+        props.store.patch({ attachments: [...panel.attachments, ...created], error: null })
+      } catch (error) {
+        props.store.patch({ error: error instanceof Error ? error.message : String(error) })
       }
-      const created = createDraftImages(images)
-      props.store.patch({ attachments: [...panel.attachments, ...created], error: null })
-    } catch (error) {
-      props.store.patch({ error: error instanceof Error ? error.message : String(error) })
-    }
+    })()
   }, [limits, panel.attachments, props.store, props.t])
 
   // Load the deployment image policy once (fast-path checks mirror the host).
@@ -1603,7 +1634,7 @@ function SidechatPanel(props: {
               aria-label={activeRunning ? props.t('panel.stop') : props.t('panel.send')}
               onClick={activeRunning ? stop : send}
             >
-              {activeRunning ? <IconStopFill16 size={16} /> : <IconSendOutline16 size={16} />}
+              {activeRunning ? <IconStopFill16 size={16} /> : <IconSendOutline14 size={16} />}
             </button>
           </Tooltip>
         </div>

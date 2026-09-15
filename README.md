@@ -99,7 +99,15 @@ and you never have to answer before you're ready.
 
 - [Node.js](https://nodejs.org) ≥ 20
 - [pnpm](https://pnpm.io)
-- DSH ≥ `0.1.0-rc.6` (the harness `engines.dsh` constraint)
+- DSH ≥ `0.1.0-rc.6` (the harness `engines.dsh` constraint); verified against
+  `0.1.5-alpha.2` and `0.1.6-alpha.1`. Where those lines differ (`catalog()` vs
+  `selectFor()` on permission presets, the added `maxImageDimension` image
+  limit, the `IconSendOutline16` icon removal) the plugin feature-detects and
+  serves both.
+- `pnpm build` ends with `check-seed-exports`, which compares the client
+  bundle's frozen-module-table imports against a real DSH install. Set
+  `DSH_INSTALL` (or pass `--shell`) when the install is not discoverable via
+  `dsh` on `PATH`; without a target the check skips instead of failing.
 
 ## Build
 

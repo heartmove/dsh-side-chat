@@ -93,7 +93,7 @@ export const api = {
     call<{ accepted: true }>('sidechat.inject', args),
   directory: () => call<SidechatDirectory>('sidechat.directory', {}),
   permissions: () => call<SidechatPermissions>('sidechat.permissions', {}),
-  limits: () => call<{ mediaTypes: string[]; maxImageBytes: number; maxImagesPerMessage: number; maxMessageImageBytes: number; maxImagePixels: number }>('sidechat.limits', {}),
+  limits: () => call<{ mediaTypes: string[]; maxImageBytes: number; maxImagesPerMessage: number; maxMessageImageBytes: number; maxImagePixels: number; maxImageDimension?: number }>('sidechat.limits', {}),
   attachment: (args: { childId: string; attachmentId: string }) =>
     call<{ mediaType: string; data: string }>('sidechat.attachment', args),
   inherit: (args: { parentSessionId: string }) =>

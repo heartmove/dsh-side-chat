@@ -97,7 +97,21 @@ jobs:
             fs.writeFileSync('dsh.plugin.json',JSON.stringify(m,null,2)+'\n');
           "
 
+      # A prerelease must never land on `latest`, or it would displace the
+      # stable line for every `dsh-side-chat-plus` consumer. `0.4.0-alpha.1`
+      # publishes under `alpha`; a plain `0.4.0` publishes under `latest`.
+      - name: Resolve npm dist-tag
+        id: disttag
+        run: |
+          node -e "
+            const version = '${{ steps.version.outputs.version }}';
+            const prerelease = version.split('+')[0].split('-')[1];
+            const tag = prerelease ? prerelease.split('.')[0] : 'latest';
+            require('fs').appendFileSync(process.env.GITHUB_OUTPUT, 'tag=' + tag + '\n');
+            console.log('publishing ' + version + ' under dist-tag \'' + tag + '\'');
+          "
+
       - name: Publish to npm
-        run: pnpm publish --no-git-checks --access public --provenance
+        run: pnpm publish --no-git-checks --access public --provenance --tag "${{ steps.disttag.outputs.tag }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

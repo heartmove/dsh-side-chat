@@ -66,7 +66,13 @@ Codex 式能力之上，额外支持针对当前**问题弹框**的侧边聊天�
 
 - [Node.js](https://nodejs.org) ≥ 20
 - [pnpm](https://pnpm.io)
-- DSH ≥ `0.1.0-rc.6`（即 `engines.dsh` 声明的约束）
+- DSH ≥ `0.1.0-rc.6`（即 `engines.dsh` 声明的约束）；已在 `0.1.5-alpha.2` 与
+  `0.1.6-alpha.1` 上验证。两代存在差异的地方（权限预设的 `catalog()` 与
+  `selectFor()`、新增的 `maxImageDimension` 图片上限、被移除的
+  `IconSendOutline16` 图标）插件都做了特性探测，两代都能服务。
+- `pnpm build` 最后会跑 `check-seed-exports`：把客户端 bundle 对冻结模块表的
+  引用与一份真实 DSH 安装做比对。若 `dsh` 不在 `PATH` 上而探测不到安装目录，
+  可设 `DSH_INSTALL`（或传 `--shell`）；找不到目标时会跳过而不是失败。
 
 ## 构建
 

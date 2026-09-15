@@ -23,6 +23,7 @@ import type {
   SideImageAttachmentRef,
   SideInstallModelSelection,
   SideModelSelectionRef,
+  SidePresetOption,
   SideSession,
   SideSessionEvent,
 } from './context-types.ts'
@@ -40,7 +41,6 @@ export const inject = [
   'agents',
   'workspaceRegistry',
   'sessionQuery',
-  'sandboxPolicy',
   'permissionPresets',
   'agentPresets',
   'llm',
@@ -181,17 +181,6 @@ function openTurnStart(events: readonly SideSessionEvent[]): number | undefined 
   return lastStart
 }
 
-/**
- * Read a session's event log across DSH versions: 0.1.5+ exposes
- * `snapshotEvents()`; 0.1.2-era sessions carried a plain `events` getter.
- */
-function sessionEvents(session: SideSession): readonly SideSessionEvent[] {
-  if (typeof session.snapshotEvents === 'function') {
-    return session.snapshotEvents()
-  }
-  return session.events ?? []
-}
-
 /** Schemastery schema for the user-facing preferences (validated by the settings service). */
 const PrefsSchema: z<SubchatPrefs> = z.object({
   lookupDefault: z.boolean().default(SUBCHAT_PREFS_DEFAULTS.lookupDefault),
@@ -327,11 +316,20 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
     return { executed: result !== undefined }
   }
 
+  /**
+   * Read a side chat's event log through the session-query service. DSH 0.1.6
+   * deprecated the Session's synchronous event getters (`snapshotEvents`,
+   * `eventAt`, `ownEvents`); `readSession` is the live-preferred asynchronous
+   * read that supersedes them, and the transcript routes already use it.
+   */
+  const sessionEvents = async (sessionId: string): Promise<readonly SideSessionEvent[]> =>
+    (await ctx.sessionQuery.readSession(sessionId)).events
+
   /** Fold one side-chat agent's plan/goal state for its composer chrome. */
-  const state = (payload: unknown): { plan: { active: boolean; pending: boolean }; goal: { id: string; objective: string } | null } => {
+  const state = async (payload: unknown): Promise<{ plan: { active: boolean; pending: boolean }; goal: { id: string; objective: string } | null }> => {
     const childId = requireString(payload, 'childId')
-    const child = childOf(childId)
-    const events = sessionEvents(child.session)
+    childOf(childId)
+    const events = await sessionEvents(childId)
     // Plan fold mirrors dsh-plan-mode's `plan` projection.
     let planActive = false
     let planWanted: boolean | null = null
@@ -479,7 +477,7 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
   }
 
   /** List the side chats launched by one parent conversation. */
-  const list = (payload: unknown): { items: Array<{ childId: string; running: boolean; runningSince?: number }> } => {
+  const list = async (payload: unknown): Promise<{ items: Array<{ childId: string; running: boolean; runningSince?: number }> }> => {
     const parentSessionId = requireString(payload, 'parentSessionId')
     const items: Array<{ childId: string; running: boolean; runningSince?: number }> = []
     for (const record of sideChats.values()) {
@@ -494,7 +492,8 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
       // back to the open-turn event scan.
       const status = (agent as { status?: string }).status
       const statusRunning = status === 'running'
-      const eventRunningSince = openTurnStart(sessionEvents(agent.session))
+      // Only the status-less fallback pays for a log read.
+      const eventRunningSince = status === undefined ? openTurnStart(await sessionEvents(record.childId)) : undefined
       const running = statusRunning || (status === undefined && eventRunningSince !== undefined)
       const runningSince = running ? (eventRunningSince ?? Date.now()) : undefined
       items.push({
@@ -522,7 +521,7 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
   }
 
   /** The deployment-resolved image policy (for client-side fast-path checks). */
-  const limits = (): { mediaTypes: string[]; maxImageBytes: number; maxImagesPerMessage: number; maxMessageImageBytes: number; maxImagePixels: number } => {
+  const limits = (): { mediaTypes: string[]; maxImageBytes: number; maxImagesPerMessage: number; maxMessageImageBytes: number; maxImagePixels: number; maxImageDimension?: number } => {
     const l = ctx.attachments.imageLimits
     return {
       mediaTypes: [...l.mediaTypes],
@@ -530,6 +529,8 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
       maxImagesPerMessage: l.maxImagesPerMessage,
       maxMessageImageBytes: l.maxMessageImageBytes,
       maxImagePixels: l.maxImagePixels,
+      // Added in 0.1.6; earlier lines leave it absent so the client skips the check.
+      ...(l.maxImageDimension === undefined ? {} : { maxImageDimension: l.maxImageDimension }),
     }
   }
 
@@ -718,11 +719,31 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
 
   /** Permission-preset options for the side-chat selector. */
   const permissions = (): { options: Array<{ value: string; name: string; description?: string }>; current: string } => {
-    const select = ctx.permissionPresets.selectFor({})
-    return {
-      options: select.options.map((o) => ({ value: o.value, name: o.name, ...(o.description === undefined ? {} : { description: o.description }) })),
-      current: select.currentValue,
+    const presets = ctx.permissionPresets
+    const toOption = (o: SidePresetOption): { value: string; name: string; description?: string } => ({
+      value: o.value,
+      name: o.name,
+      ...(o.description === undefined ? {} : { description: o.description }),
+    })
+    // 0.1.6 split the combined `selectFor(knobState)` into a process-level
+    // `catalog()` plus a separate current value. Prefer the new face and fall
+    // back to the old one so both release lines serve this route.
+    const catalog = presets.catalog
+    if (typeof catalog === 'function') {
+      return {
+        options: catalog.call(presets).options.map(toOption),
+        current: presets.defaultPreset ?? 'custom',
+      }
     }
+    const selectFor = presets.selectFor
+    if (typeof selectFor === 'function') {
+      const select = selectFor.call(presets, {})
+      return {
+        options: select.options.map(toOption),
+        current: select.currentValue,
+      }
+    }
+    throw new SidechatError('permissions-unavailable', 'the permission-presets service exposes neither catalog() nor selectFor()', 503)
   }
 
   return {
@@ -825,6 +846,23 @@ export function apply(ctx: Context): void {
       sideChats.clear()
     }
   }, 'dsh-side-chat: dispose side chats')
+
+  // DSH 0.1.6 lists archived sessions in Settings and lets the user restore
+  // one. A side chat is archived precisely so it stays out of the session
+  // list, so at activation re-archive every recorded side chat that a restore
+  // (or an older run) left visible again. Best-effort: records whose session
+  // no longer exists are simply skipped.
+  ctx.effect(() => {
+    void (async () => {
+      for (const record of await readRecords()) {
+        try {
+          await ctx.workspaceRegistry.archiveSession(record.childId)
+        } catch {
+          // Unknown/expired ids are expected as the record list ages out.
+        }
+      }
+    })()
+  }, 'dsh-side-chat: re-archive recorded side chats')
 
   ctx.effect(() => ctx.webServer.register({
     kind: 'prefix',

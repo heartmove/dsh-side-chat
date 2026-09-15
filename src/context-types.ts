@@ -43,17 +43,14 @@ export interface SideSessionEvent {
   sourceEventSeqs?: number[]
 }
 
-/** The live session face the host reads (header + append-only event log). */
+/**
+ * The live session face the host reads. Event reads go through
+ * `sessionQuery.readSession` instead: DSH 0.1.6 deprecated the Session's
+ * synchronous event getters (`events` before 0.1.5, `snapshotEvents` after).
+ */
 export interface SideSession {
   id: string
   header: SideSessionHeader
-  /**
-   * 0.1.2-era event getter. Removed in 0.1.5 (snapshotEvents takes over), so
-   * host code reads through `sessionEvents()` which prefers the new method.
-   */
-  events?: readonly SideSessionEvent[]
-  /** 0.1.5+ snapshot of the full event log; absent on 0.1.2-era sessions. */
-  snapshotEvents?: (fromSeq?: number, toSeqExclusive?: number) => readonly SideSessionEvent[]
   requestHeader?: () => { config?: { provider?: string; model?: string; reasoningEffort?: string; maxTokens?: number } } | undefined
 }
 
@@ -212,14 +209,6 @@ export interface SideSessionQuery {
   readSession(sessionId: string): Promise<SideSessionLogSnapshot>
 }
 
-/** Sandbox mode vocabulary (read from the session override). */
-export type SideSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
-
-/** The sandbox policy face. */
-export interface SideSandboxPolicy {
-  overrideOf(session: SideSession): SideSandboxMode | undefined
-}
-
 /** One permission preset option. */
 export interface SidePresetOption {
   value: string
@@ -231,7 +220,12 @@ export interface SidePresetOption {
 export interface SidePermissionPresets {
   current(session: SideSession): string
   set(session: SideSession, name: string): void
-  selectFor(state: unknown): { options: SidePresetOption[]; currentValue: string }
+  /** 0.1.6+: process-level catalog of selectable presets. */
+  catalog?(): { options: SidePresetOption[] }
+  /** 0.1.6+: the preset selected as the default for future sessions. */
+  defaultPreset?: string
+  /** 0.1.5 and earlier: combined catalog plus current value. Removed in 0.1.6. */
+  selectFor?(state: unknown): { options: SidePresetOption[]; currentValue: string }
 }
 
 /** The agent presets face (composeFrom joins a child to the parent's composition). */
@@ -356,6 +350,8 @@ export interface SideAttachmentStore {
     maxImagesPerMessage: number
     maxMessageImageBytes: number
     maxImagePixels: number
+    /** 0.1.6+ per-image intrinsic width/height ceiling; absent on earlier lines. */
+    maxImageDimension?: number
     mediaTypes: readonly string[]
   }
   validateImage(input: { data: Uint8Array; mediaType: string; name?: string }): Promise<void>
@@ -394,7 +390,6 @@ declare module 'cordis' {
     agents: SideAgentsService
     workspaceRegistry: SideWorkspaceRegistry
     sessionQuery: SideSessionQuery
-    sandboxPolicy: SideSandboxPolicy
     permissionPresets: SidePermissionPresets
     agentPresets: SideAgentPresets
     llm: SideLlm
