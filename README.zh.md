@@ -1,5 +1,7 @@
 # dsh-side-chat — 侧边聊天（Side chat）
 
+当前适配 DSH **0.1.7-alpha.1**，详见[兼容性变更](CHANGELOG.md)。
+
 一个 [DSH](https://www.deepseek.com) 网页插件，**Codex 式侧边聊天的强化版本**：
 在右侧面板提供按主会话隔离的独立聊天，具备 Codex 式的智能体能力——继承主会话的
 工具集、模型、思考难度与权限预设，能感知所在工作目录；选中对话内容即可提问，AI 回复
@@ -17,6 +19,9 @@
   选中的内容会自动带入侧边聊天。
 - **按主会话隔离。** 每个侧边聊天都是一个隐藏的普通 DSH 会话（通过
   `meta.parentSession` 关联发起它的主会话，并被归档，因此不会出现在主会话列表中）。
+  DSH 0.1.7 不再允许已归档会话进入模型步，因此侧边聊天在回答期间会临时取消归档，
+  该轮结束后立即恢复归档。宿主创建的会话不占任何工作区记录，所以即使在这段窗口里，
+  它也只可能落在侧栏的「未分组」里，永远不会出现在发起它的工作区下。
   每个主会话各自拥有自己的侧边聊天。
 - **继承主会话上下文。** 侧边聊天能感知它的发起会话与所在工作目录，并默认继承主会话的
   工具集、模型、思考难度与权限预设，可以像主会话一样作用于同一个工作区。
@@ -66,10 +71,7 @@ Codex 式能力之上，额外支持针对当前**问题弹框**的侧边聊天�
 
 - [Node.js](https://nodejs.org) ≥ 20
 - [pnpm](https://pnpm.io)
-- DSH ≥ `0.1.0-rc.6`（即 `engines.dsh` 声明的约束）；已在 `0.1.5-alpha.2` 与
-  `0.1.6-alpha.1` 上验证。两代存在差异的地方（权限预设的 `catalog()` 与
-  `selectFor()`、新增的 `maxImageDimension` 图片上限、被移除的
-  `IconSendOutline16` 图标）插件都做了特性探测，两代都能服务。
+- DSH `0.1.7-alpha.1` (`^0.1.7-0`).
 - `pnpm build` 最后会跑 `check-seed-exports`：把客户端 bundle 对冻结模块表的
   引用与一份真实 DSH 安装做比对。若 `dsh` 不在 `PATH` 上而探测不到安装目录，
   可设 `DSH_INSTALL`（或传 `--shell`）；找不到目标时会跳过而不是失败。
@@ -97,12 +99,7 @@ pnpm build
 
 包名为 `dsh-side-chat-plus`（npm 上的裸名 `dsh-side-chat` 属于另一维护者，因此发布以 `-plus` 命名）。
 
-> **registry 依赖说明。** 本插件所依赖的 harness 包（DSH `0.1.2` 这一代 API）在 npm 上以预发布
-> （`0.1.2-rc.1`）发布，且个别包内部用普通 `>=0.1.2` 范围引用同系列包，npm/pnpm 不会把
-> 预发布版本当作满足该范围。因此开发用的 `pnpm-workspace.yaml` 把 `@deepseek-ai/dsh-*` 指向
-> 本地 harness checkout（绝对路径 `D:/code/...`，仅存在于维护者本机）。CI 会把该文件替换成
-> overrides 将每个 `@deepseek-ai/dsh-*` 依赖固定到 `0.1.2-rc.1` 的版本，从而让安装从 registry
-> 解析。在其他机器上，把 overrides 指向你自己的 harness 克隆，或直接以 CI 的 workspace 文件为模板。
+> **registry 依赖说明。** 本地和 CI 使用精确的 DSH `0.1.7-alpha.1` 开发依赖和同一份锁文件，无需本地 harness checkout 或 CI 专用 overrides。
 
 ## 部署
 

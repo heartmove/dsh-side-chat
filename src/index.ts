@@ -1,10 +1,17 @@
 /**
  * dsh-side-chat host half: the /sidechat JSON API. Every side chat is an
  * ORDINARY session (no `origin: 'subagent'`) whose `meta.parentSession` points
- * at the conversation that launched it, archived immediately so it appears in
- * neither the main session list nor the subagent catalog, and driven directly
- * through the live agent (followup). Model / reasoning-effort / permission are
+ * at the conversation that launched it, kept archived so it appears in neither
+ * the main session list nor the subagent catalog, and driven directly through
+ * the live agent (followup). Model / reasoning-effort / permission are
  * inherited from the launching conversation at creation and adjustable later.
+ *
+ * DSH 0.1.7 admits archived sessions to no model step: its archived-session
+ * gate answers `{ kind: 'reject' }` on `agent/pre-step` for a session in the
+ * registry archive set, so a turn ends `blocked` before the first request. The
+ * archive is therefore lifted (unarchived) for exactly as long as a side chat
+ * has work queued and restored as soon as its agent settles — see
+ * `deliver`/`settleTurn` below.
  *
  * All routes pass the same browser-trust fence as the /api gateway (loopback
  * or trusted authority; cross-site markers refuse).
@@ -14,7 +21,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import * as agentApi from '@deepseek-ai/dsh-agent'
 import { dshHomePath } from '@deepseek-ai/dsh-home-paths'
-import { SettingsConflictError, type SettingsNamespace } from '@deepseek-ai/dsh-settings'
+import { SettingsConflictError } from '@deepseek-ai/dsh-settings'
 import z from 'schemastery'
 import type {
   Context,
@@ -27,7 +34,7 @@ import type {
   SideSession,
   SideSessionEvent,
 } from './context-types.ts'
-import { SUBCHAT_PREFS_DEFAULTS, SUBCHAT_PREFS_NS, type SubchatPrefs } from './settings-shared.ts'
+import { SUBCHAT_PREFS_DEFAULTS, type SubchatPrefs } from './settings-shared.ts'
 import { isTrustedApiRequest } from './trust-fence.ts'
 import { optionalBoolean, readJsonBody, requireString, SidechatError, writeError, writeJson, writeOk } from './wire.ts'
 
@@ -64,6 +71,12 @@ interface SidechatRecord {
   /** Live selection coupled to the agent; mutated by `sidechat.selectModel`. */
   selection: SideModelSelectionRef
   createdAt: number
+  /**
+   * Deliveries whose turn has not settled yet. The session stays unarchived
+   * while this is non-zero and is archived again when it reaches zero, so a
+   * followup sent mid-turn can never be archived out from under itself.
+   */
+  pendingTurns: number
 }
 
 /** Durable record list file (cleanup is a later feature; the list is the record). */
@@ -189,6 +202,10 @@ const PrefsSchema: z<SubchatPrefs> = z.object({
   bringMode: z.union(['draft', 'context']).default(SUBCHAT_PREFS_DEFAULTS.bringMode),
   panelHome: z.union(['floating', 'sidebar-right']).default(SUBCHAT_PREFS_DEFAULTS.panelHome),
 })
+
+// DSH 0.1.7 derives settings from the Loader entry's live Config fields.
+// Volatile preferences update without disposing the running side chats.
+export const Config = PrefsSchema.volatile()
 
 /** Live settings face (bound when the settings service is mounted). */
 interface SubchatSettingsFace {
@@ -361,7 +378,68 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
     }
   }
 
-  /** Create one side chat: inherit, archive, record, deliver the first prompt. */
+  /**
+   * Serialize one side chat's archive/unarchive writes. Both registry calls go
+   * through the host registry's own operation queue, so enqueueing them in call
+   * order is what decides the final state; this chain keeps that order stable
+   * when a settling turn and a new delivery overlap.
+   */
+  const visibilityQueue = new Map<string, Promise<void>>()
+  const queueVisibility = (childId: string, op: () => Promise<void>): Promise<void> => {
+    const previous = visibilityQueue.get(childId) ?? Promise.resolve()
+    const next = previous.then(op, op)
+    visibilityQueue.set(childId, next.then(() => {}, () => {}))
+    return next
+  }
+
+  /**
+   * Restore one side chat's session before a turn. Registries older than the
+   * 0.1.7 gate have no `unarchiveSession` (and need none): there the archive
+   * simply stays in place for the whole turn. A failed restore propagates: the
+   * caller must not deliver a prompt the gate will answer with `blocked`.
+   */
+  const unarchiveChild = (childId: string): Promise<void> => {
+    const unarchive = ctx.workspaceRegistry.unarchiveSession
+    if (unarchive === undefined) return archiveChild(childId)
+    return queueVisibility(childId, () => unarchive.call(ctx.workspaceRegistry, childId))
+  }
+
+  /**
+   * Hide one side chat's session again once its agent has settled. Best-effort:
+   * a registry that reports the session active (or refuses the write) only
+   * leaves it visible until the next settle, never breaks a turn.
+   */
+  const archiveChild = (childId: string): Promise<void> => {
+    return queueVisibility(childId, () => ctx.workspaceRegistry.archiveSession(childId)).catch(() => {})
+  }
+
+  /** Count one settled turn and re-archive the session when the last one ends. */
+  const settleTurn = (record: SidechatRecord): void => {
+    if (record.pendingTurns > 0) record.pendingTurns -= 1
+    if (record.pendingTurns > 0) return
+    void archiveChild(record.childId)
+  }
+
+  /**
+   * Hand one prompt to a side chat: lift the archive, deliver, and let the
+   * agent's own idle boundary put the session back out of every list. `followup`
+   * opens the driver synchronously (the phase turns `running` before it
+   * returns), so observing `whenIdle` right after it can never miss the turn.
+   */
+  const deliver = async (record: SidechatRecord, message: unknown): Promise<void> => {
+    record.pendingTurns += 1
+    try {
+      await unarchiveChild(record.childId)
+      record.handle.agent.followup(message)
+    } catch (error) {
+      // Balance the count: the delivery never opened a turn.
+      settleTurn(record)
+      throw error
+    }
+    void record.handle.agent.whenIdle().then(() => { settleTurn(record) }, () => { settleTurn(record) })
+  }
+
+  /** Create one side chat: inherit, record, deliver the first prompt (hidden while idle). */
   const start = async (payload: unknown): Promise<{ childId: string; provider: string; model: string; reasoningEffort?: string }> => {
     const parentSessionId = requireString(payload, 'parentSessionId')
     const content = requireContent(payload)
@@ -450,19 +528,18 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
       console.warn('[dsh-side-chat] permission inherit failed:', error instanceof Error ? error.message : String(error))
     }
 
-    // Archive BEFORE the first prompt so the session is hidden from every list.
-    await ctx.workspaceRegistry.archiveSession(childId)
-
-    sideChats.set(childId, {
+    const child: SidechatRecord = {
       childId,
       parentSessionId,
       handle,
       selection,
       createdAt: Date.now(),
-    })
+      pendingTurns: 0,
+    }
+    sideChats.set(childId, child)
     persist()
 
-    handle.agent.followup(userMessage(await durableContent(content, lookupEnabled)))
+    await deliver(child, userMessage(await durableContent(content, lookupEnabled)))
     return { childId, provider, model, ...(reasoningEffort === undefined ? {} : { reasoningEffort }) }
   }
 
@@ -472,7 +549,17 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
     const content = requireContent(payload)
     const lookupEnabled = optionalBoolean(payload, 'lookupEnabled')
     const child = childOf(childId)
-    child.followup(userMessage(await durableContent(content, lookupEnabled)))
+    const record = sideChats.get(childId)
+    const message = userMessage(await durableContent(content, lookupEnabled))
+    if (record === undefined) {
+      // A child adopted from the live agent registry (record lost) still needs
+      // its archive lifted before a turn it did not create itself.
+      await unarchiveChild(childId)
+      child.followup(message)
+      void child.whenIdle().then(() => { void archiveChild(childId) }, () => { void archiveChild(childId) })
+      return { accepted: true }
+    }
+    await deliver(record, message)
     return { accepted: true }
   }
 
@@ -651,7 +738,9 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
       id: randomUUID(),
       role: 'user',
       content: [{ type: 'text', text }],
-      source: { kind: 'plugin', plugin: 'dsh-side-chat', form: 'notice', summary },
+      // V4 rejects the retired { kind: 'plugin', plugin: ... } wrapper.
+      // Match the identity assigned to historical messages by V3→V4 migration.
+      source: { kind: 'plugin:dsh-side-chat', form: 'notice', summary },
     })
     return { accepted: true }
   }
@@ -810,15 +899,11 @@ export function apply(ctx: Context): void {
   const sideChats = new Map<string, SidechatRecord>()
   let settingsFace: SubchatSettingsFace | undefined
 
-  // Register the preferences namespace with the (optional) settings service.
-  // The client reads/writes it through the plugin's own fenced routes, since
-  // the DSH settings RPC domain only serves allowlisted namespaces.
+  // Settings namespaces are now Loader entry ids, including user-renamed rows.
   ctx.inject(['settings'], (sctx: Context) => {
-    const ns = SUBCHAT_PREFS_NS as SettingsNamespace
-    const scope = sctx.settings.register(ns, PrefsSchema) as {
-      get(): SubchatPrefs
-      watch(cb: (next: SubchatPrefs, prev: SubchatPrefs) => void): () => void
-    }
+    const ns = (ctx as Context & { entry?: { id: string } }).entry?.id
+    if (ns === undefined) return
+    sctx.effect(() => sctx.settings.configure({ auto: false }, ctx.fiber))
     const viewOf = (): { value?: unknown; revision?: number } => {
       const descriptor = sctx.settings.describe({ redactSecrets: true }).find((c) => c.ns === ns)
       return descriptor === undefined
@@ -832,26 +917,41 @@ export function apply(ctx: Context): void {
         return viewOf()
       },
     }
-    void scope
+    sctx.effect(() => () => { settingsFace = undefined })
   })
 
   const api = buildApi(ctx, sideChats, () => settingsFace)
 
-  // Tear every live side chat down with the plugin fiber.
+  // Tear every live side chat down with the plugin fiber, and put back the
+  // archive of any chat that was mid-turn (a live turn is lifted from the
+  // archive for its duration, so an unload would otherwise leave it visible).
   ctx.effect(() => {
     return () => {
-      for (const record of sideChats.values()) {
-        void record.handle.dispose().catch(() => {})
-      }
+      const records = [...sideChats.values()]
       sideChats.clear()
+      void (async () => {
+        for (const record of records) {
+          try {
+            await record.handle.dispose()
+          } catch {
+            // A half-disposed agent must not stop the archive restore below.
+          }
+          try {
+            await ctx.workspaceRegistry.archiveSession(record.childId)
+          } catch {
+            // Best-effort: a still-active session stays visible until next run.
+          }
+        }
+      })()
     }
   }, 'dsh-side-chat: dispose side chats')
 
   // DSH 0.1.6 lists archived sessions in Settings and lets the user restore
   // one. A side chat is archived precisely so it stays out of the session
-  // list, so at activation re-archive every recorded side chat that a restore
-  // (or an older run) left visible again. Best-effort: records whose session
-  // no longer exists are simply skipped.
+  // list, so at activation re-archive every recorded side chat that a restore,
+  // an interrupted run (turn still open when the harness stopped), or an older
+  // run left visible again. Best-effort: records whose session no longer
+  // exists are simply skipped.
   ctx.effect(() => {
     void (async () => {
       for (const record of await readRecords()) {

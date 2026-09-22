@@ -1,5 +1,7 @@
 # dsh-side-chat — 侧边聊天 (Side chat)
 
+Targets DSH **0.1.7-alpha.1**. See [compatibility changes](CHANGELOG.md).
+
 An **enhanced version of a Codex-style side chat** for
 [DSH](https://www.deepseek.com): a dedicated, agentic chat in a right-side
 panel, scoped to the conversation it was started from and aware of its
@@ -23,7 +25,12 @@ through first, then bring the answer back and answer the dialog.
   into the side chat automatically.
 - **Per-conversation isolation.** Each side chat is a hidden ordinary DSH
   session (`meta.parentSession` links it to the conversation that started it,
-  and the session is archived so it never appears in the main session list).
+  and the session is archived so it stays out of the main session list).
+  DSH 0.1.7 refuses a model step to an archived session, so the archive is
+  lifted for exactly as long as a side-chat turn is running and restored when
+  it settles. A host-created session is never accounted to a Workspace, so even
+  in that window it can only surface under the sidebar's *Ungrouped* bucket,
+  never under the workspace it was started from.
   Every conversation gets its own side chat.
 - **Inherits main-conversation context.** The side chat is aware of the
   conversation it was started from and its working directory, and inherits the
@@ -99,11 +106,7 @@ and you never have to answer before you're ready.
 
 - [Node.js](https://nodejs.org) ≥ 20
 - [pnpm](https://pnpm.io)
-- DSH ≥ `0.1.0-rc.6` (the harness `engines.dsh` constraint); verified against
-  `0.1.5-alpha.2` and `0.1.6-alpha.1`. Where those lines differ (`catalog()` vs
-  `selectFor()` on permission presets, the added `maxImageDimension` image
-  limit, the `IconSendOutline16` icon removal) the plugin feature-detects and
-  serves both.
+- DSH `0.1.7-alpha.1` (`^0.1.7-0`).
 - `pnpm build` ends with `check-seed-exports`, which compares the client
   bundle's frozen-module-table imports against a real DSH install. Set
   `DSH_INSTALL` (or pass `--shell`) when the install is not discoverable via
@@ -136,16 +139,7 @@ The package name is `dsh-side-chat-plus` (the plain `dsh-side-chat` name on npm
 belongs to a different maintainer, so the release is published under the
 `-plus` name).
 
-> **Registry dependencies.** The harness packages this plugin targets (the DSH
-> `0.1.2` API line) are published to npm as prereleases (`0.1.2-rc.1`) and, in a
-> few cases, declare internal dependencies with a plain `>=0.1.2` range that
-> npm/pnpm refuses to match against a prerelease. The developer `pnpm-workspace.yaml`
-> therefore points the `@deepseek-ai/dsh-*` packages at a local harness checkout
-> (absolute `D:/code/...` paths that exist only on the maintainer's machine). CI
-> swaps that file for one whose overrides pin every `@deepseek-ai/dsh-*`
-> dependency to `0.1.2-rc.1`, so installs resolve from the registry. On another
-> machine, point the overrides at your own harness clone or use the CI workspace
-> file as a template.
+> **Registry dependencies.** Local and CI builds use exact DSH `0.1.7-alpha.1` development dependencies and the checked-in lockfile. No local harness checkout or CI-only overrides are required.
 
 ## Deploy
 

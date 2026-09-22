@@ -10,13 +10,13 @@ import { useSyncExternalStore } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import {
   DisclosureRow,
-  IconCheckOutline16,
-  IconChevronDownOutline14,
-  IconChevronRightOutline14,
-  IconPanelLeftOutline16,
-  IconSendOutline14,
-  IconStopFill16,
-  IconThinkOutline14,
+  IconCheckOutlineRegular,
+  IconChevronDownOutlineRegular,
+  IconChevronRightOutlineRegular,
+  IconPanelLeftOutlineRegular,
+  IconSendOutlineRegular,
+  IconStopFillRegular,
+  IconThinkOutlineRegular,
   MarkdownText,
   Menu,
   Tooltip,
@@ -28,7 +28,7 @@ import {
   ImageLightbox,
   type ImageLoader,
 } from './attachments/index.ts'
-import type { Context, SideQuestionItem, SideQuestionOption, SideSidebarRight } from '../context-types.ts'
+import type { Context, SidePendingInteraction, SideQuestionItem, SideQuestionOption, SideSidebarRight, SideSidebarRightTabs } from '../context-types.ts'
 import {
   api,
   type PromptContentPart,
@@ -369,7 +369,7 @@ function ReasoningRow(props: { text: string; t: (key: SidechatLocaleKey) => stri
   const summary = firstLine(props.text)
   return (
     <DisclosureRow
-      icon={<IconThinkOutline14 size={14} />}
+      icon={<IconThinkOutlineRegular size={14} />}
       title={props.t('panel.think')}
       open={expanded}
       expandable={true}
@@ -467,7 +467,7 @@ function ModelSelect(props: {
       >
         <span className={css.modelSelectLabel}>{modelLabel}</span>
         {effortLabel !== undefined && <span className={css.modelSelectEffort}>{effortLabel}</span>}
-        <IconChevronDownOutline14 className={open ? css.chevronOpen : undefined} />
+        <IconChevronDownOutlineRegular className={open ? css.chevronOpen : undefined} />
       </button>
 
       {open && (
@@ -477,13 +477,13 @@ function ModelSelect(props: {
               <button type="button" role="menuitem" className={css.modelCell} onClick={() => { setPane('model') }}>
                 <span className={css.modelCellLabel}>{t('panel.model')}</span>
                 <span className={css.modelCellValue}>{modelLabel}</span>
-                <IconChevronRightOutline14 className={css.modelCellChevron} />
+                <IconChevronRightOutlineRegular className={css.modelCellChevron} />
               </button>
               {reasoning !== undefined && (
                 <button type="button" role="menuitem" className={css.modelCell} onClick={() => { setPane('effort') }}>
                   <span className={css.modelCellLabel}>{t('panel.effort')}</span>
                   <span className={css.modelCellValue}>{effortLabel}</span>
-                  <IconChevronRightOutline14 className={css.modelCellChevron} />
+                  <IconChevronRightOutlineRegular className={css.modelCellChevron} />
                 </button>
               )}
             </>
@@ -513,7 +513,7 @@ function ModelSelect(props: {
                           <span className={css.modelName}>{model.name}</span>
                           {model.description !== undefined && <span className={css.modelDescription}>{model.description}</span>}
                         </span>
-                        <span className={css.modelCheck}>{selected ? <IconCheckOutline16 /> : null}</span>
+                        <span className={css.modelCheck}>{selected ? <IconCheckOutlineRegular /> : null}</span>
                       </button>
                     )
                   })}
@@ -544,7 +544,7 @@ function ModelSelect(props: {
                         <span className={css.modelOptionCopy}>
                           <span className={css.modelName}>{level.label}</span>
                         </span>
-                        <span className={css.modelCheck}>{selected ? <IconCheckOutline16 /> : null}</span>
+                        <span className={css.modelCheck}>{selected ? <IconCheckOutlineRegular /> : null}</span>
                       </button>
                     )
                   })}
@@ -598,7 +598,7 @@ function PermissionSelect(props: {
           onClick={() => { setOpen(!open) }}
         >
           <span className={css.modelSelectLabel}>{current?.name ?? preset}</span>
-          <IconChevronDownOutline14 />
+          <IconChevronDownOutlineRegular />
         </button>
       )}
     />
@@ -881,7 +881,7 @@ function QuestionFab(props: {
         aria-label={props.t('question.openHint')}
         onClick={props.onOpen}
       >
-        <IconPanelLeftOutline16 size={16} />
+        <IconPanelLeftOutlineRegular size={16} />
         <span className={css.questionFabDot} />
       </button>
     </Tooltip>
@@ -1352,7 +1352,7 @@ function SidechatPanel(props: {
       return (
         <Tooltip label={props.t('panel.expand')} side="bottom">
           <button type="button" className={css.collapsedHandle} onClick={() => { setCollapsed(false) }}>
-            <IconPanelLeftOutline16 size={16} />
+            <IconPanelLeftOutlineRegular size={16} />
           </button>
         </Tooltip>
       )
@@ -1379,7 +1379,7 @@ function SidechatPanel(props: {
           <div className={css.panelHeaderActions}>
             <Tooltip label={props.t('panel.collapse')} side="bottom">
               <button type="button" className={css.panelIconButton} onClick={() => { setCollapsed(true) }}>
-                <IconPanelLeftOutline16 size={16} />
+                <IconPanelLeftOutlineRegular size={16} />
               </button>
             </Tooltip>
           </div>
@@ -1634,7 +1634,7 @@ function SidechatPanel(props: {
               aria-label={activeRunning ? props.t('panel.stop') : props.t('panel.send')}
               onClick={activeRunning ? stop : send}
             >
-              {activeRunning ? <IconStopFill16 size={16} /> : <IconSendOutline14 size={16} />}
+              {activeRunning ? <IconStopFillRegular size={16} /> : <IconSendOutlineRegular size={16} />}
             </button>
           </Tooltip>
         </div>
@@ -1914,11 +1914,47 @@ export function apply(ctx: Context): void {
   // Localized copy follows the DSH locale (module-level mirror for callbacks).
   let activeLocale = ctx.locale.getSnapshot().active
 
+  /**
+   * The selected main-view Session. DSH 0.1.6-alpha.2 reworked Client Sessions
+   * into independent instances and moved the selection off the list snapshot
+   * (`sessions.list.current`, dropped) onto the ui-session scope binding;
+   * older lines keep it on the list. Read the binding first, then fall back.
+   */
+  const currentSessionId = (): string | undefined =>
+    ctx.uiSession.adapter?.current.getSnapshot().key ?? ctx.sessions.list.getSnapshot().current
+
+  /** Subscribe to current-Session changes on whichever face this DSH exposes. */
+  const subscribeCurrentSession = (fn: () => void): (() => void) => {
+    const offList = ctx.sessions.list.subscribe(fn)
+    const offAdapter = ctx.uiSession.adapter?.current.subscribe(fn)
+    if (offAdapter === undefined) return offList
+    return () => { offList(); offAdapter() }
+  }
+
+  /**
+   * The pending interaction for one Session — DSH 0.1.6-alpha.2 moved it from
+   * `uiSession.pendingInteractions` onto `uiSession.sessionStatus`; read
+   * whichever face this build exposes.
+   */
+  const pendingInteractionFor = (sessionId: string): SidePendingInteraction | undefined => {
+    if (ctx.uiSession.sessionStatus !== undefined) {
+      return ctx.uiSession.sessionStatus.getSnapshot().get(sessionId)?.pendingInteraction
+    }
+    return ctx.uiSession.pendingInteractions?.getSnapshot().get(sessionId)
+  }
+
+  /** Subscribe to pending-interaction changes on whichever face this DSH exposes. */
+  const subscribePendingInteractions = (fn: () => void): (() => void) => {
+    if (ctx.uiSession.sessionStatus !== undefined) return ctx.uiSession.sessionStatus.subscribe(fn)
+    if (ctx.uiSession.pendingInteractions !== undefined) return ctx.uiSession.pendingInteractions.subscribe(fn)
+    return () => {}
+  }
+
   /** Append text to the main composer draft (draft bring mode). */
   const draftBring = (text: string): boolean => {
     const trimmed = text.trim()
     if (trimmed === '') return false
-    const sessionId = ctx.sessions.list.getSnapshot().current
+    const sessionId = currentSessionId()
     if (sessionId === undefined) return false
     try {
       const actx = ctx.sessions.scope(sessionId)
@@ -1936,7 +1972,7 @@ export function apply(ctx: Context): void {
   const injectBring = async (text: string, summary: string): Promise<boolean> => {
     const trimmed = text.trim()
     if (trimmed === '') return false
-    const sessionId = ctx.sessions.list.getSnapshot().current
+    const sessionId = currentSessionId()
     if (sessionId === undefined) return false
     const result = await api.inject({ parentSessionId: sessionId, text: trimmed, summary })
     return result.ok
@@ -1976,7 +2012,7 @@ export function apply(ctx: Context): void {
   const askSidechat = async (text: string): Promise<boolean> => {
     const trimmed = text.trim()
     if (trimmed === '') return false
-    const parentSessionId = ctx.sessions.list.getSnapshot().current
+    const parentSessionId = currentSessionId()
     if (parentSessionId === undefined) return false
     const panel = store.getSnapshot().panel
     const content: PromptContentPart[] = [{ type: 'text', text: trimmed }]
@@ -2022,7 +2058,7 @@ export function apply(ctx: Context): void {
   const askSidechatNew = async (text: string): Promise<boolean> => {
     const trimmed = text.trim()
     if (trimmed === '') return false
-    const parentSessionId = ctx.sessions.list.getSnapshot().current
+    const parentSessionId = currentSessionId()
     if (parentSessionId === undefined) return false
     const panel = store.getSnapshot().panel
     const content: PromptContentPart[] = [{ type: 'text', text: trimmed }]
@@ -2073,7 +2109,7 @@ export function apply(ctx: Context): void {
   ctx.effect(() => {
     let lastId: string | undefined
     const sync = (): void => {
-      const next = ctx.sessions.list.getSnapshot().current
+      const next = currentSessionId()
       if (next === lastId) return
       lastId = next
       store.setCurrent(next)
@@ -2085,23 +2121,24 @@ export function apply(ctx: Context): void {
       }
     }
     sync()
-    return ctx.sessions.list.subscribe(sync)
+    return subscribeCurrentSession(sync)
   }, 'dsh-side-chat: follow current conversation')
 
   // Track the main conversation's pending user-question dialog so the panel can
   // list its questions/options with per-item bring-back buttons. DSH surfaces
-  // the pending interaction through the `uiSession.pendingInteractions` service
-  // (a per-session interaction), so we read it there instead of a session
-  // snapshot. Only re-publishes when the question object identity changes.
+  // the pending interaction per Session: `uiSession.pendingInteractions`
+  // through 0.1.6-alpha.1, and `uiSession.sessionStatus` (`.pendingInteraction`)
+  // from 0.1.6-alpha.2 — `pendingInteractionFor` reads whichever is present.
+  // Only re-publishes when the question object identity changes.
   ctx.effect(() => {
     let lastQuestion: unknown = undefined
     const read = (): void => {
-      const sessionId = ctx.sessions.list.getSnapshot().current
+      const sessionId = currentSessionId()
       if (sessionId === undefined) {
         store.setMainQuestion(null)
         return
       }
-      const interaction = ctx.uiSession.pendingInteractions.getSnapshot().get(sessionId)
+      const interaction = pendingInteractionFor(sessionId)
       const isQuestion = interaction !== undefined && (interaction.kind === 'question' || interaction.kind === 'plan-review')
       const question = isQuestion ? interaction : undefined
       if (question === lastQuestion) return
@@ -2110,8 +2147,8 @@ export function apply(ctx: Context): void {
       store.setMainQuestion(questions === null ? null : [...questions])
     }
     read()
-    const offPending = ctx.uiSession.pendingInteractions.subscribe(read)
-    const offList = ctx.sessions.list.subscribe(read)
+    const offPending = subscribePendingInteractions(read)
+    const offList = subscribeCurrentSession(read)
     return () => { offPending(); offList() }
   }, 'dsh-side-chat: track main question dialog')
 
@@ -2121,9 +2158,9 @@ export function apply(ctx: Context): void {
   ctx.effect(() => {
     const timer = window.setInterval(() => {
       if (store.getSnapshot().mainQuestion === null) return
-      const sessionId = ctx.sessions.list.getSnapshot().current
+      const sessionId = currentSessionId()
       if (sessionId === undefined) return
-      const interaction = ctx.uiSession.pendingInteractions.getSnapshot().get(sessionId)
+      const interaction = pendingInteractionFor(sessionId)
       const hasQuestion = interaction !== undefined && (interaction.kind === 'question' || interaction.kind === 'plan-review')
       if (!hasQuestion) store.setMainQuestion(null)
     }, 1200)
@@ -2145,14 +2182,17 @@ export function apply(ctx: Context): void {
       if (docked) {
         if (phase === 'docked' || phase === 'unavailable') return
         const sidebarRight = ctx.get('sidebarRight') as SideSidebarRight | undefined
-        if (sidebarRight === undefined) {
+        // Use the public registry shared by official Sidebar conversations.
+        const sidebarRightTabs = (ctx.get('sidebarRightTabs') as SideSidebarRightTabs | undefined)
+          ?? sidebarRight?.tabs
+        if (sidebarRight === undefined || sidebarRightTabs === undefined) {
           phase = 'unavailable'
           store.patch({ error: translate(activeLocale, 'dock.unavailable') })
           return
         }
         const dockT = (key: SidechatLocaleKey): string => translate(activeLocale, key)
 
-        const disposeType = sidebarRight.tabs.register({
+        const disposeType = sidebarRightTabs.register({
           id: SIDEBAR_TAB_ID,
           kind: SIDEBAR_TAB_KIND,
           priority: 'extension',

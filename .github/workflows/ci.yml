@@ -31,47 +31,9 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
 
-      # The repository's pnpm-workspace.yaml pins @deepseek-ai/dsh-* to a local
-      # harness checkout (D:/code/deepseek-harness) for development against the
-      # DSH 0.1.2 source APIs. That absolute path exists only on the maintainer's
-      # machine, so CI swaps it for the published prerelease line (0.1.2-rc.1),
-      # which is the only npm release that carries the 0.1.2 API surface. See
-      # README "Build" for the local vs. registry dependency story.
-      - name: Write registry-resolvable pnpm-workspace overrides
-        shell: bash
-        run: |
-          cat > pnpm-workspace.yaml <<'EOF'
-          packages:
-            - .
-          # CI-only overrides: resolve the DSH 0.1.2 API line from the registry
-          # instead of a local harness checkout. DSH ships 0.1.2 as prereleases
-          # (0.1.2-rc.1), and several packages in the tree declare internal deps
-          # with a plain ">=0.1.2" range that npm/pnpm never matches against a
-          # prerelease, so each @deepseek-ai/dsh-* dependency must be pinned
-          # explicitly to the rc release.
-          overrides:
-            '@deepseek-ai/dsh-agent': npm:@deepseek-ai/dsh-agent@0.1.2-rc.1
-            '@deepseek-ai/dsh-agent-presets': npm:@deepseek-ai/dsh-agent-presets@0.1.2-rc.1
-            '@deepseek-ai/dsh-attachment': npm:@deepseek-ai/dsh-attachment@0.1.2-rc.1
-            '@deepseek-ai/dsh-client-locale': npm:@deepseek-ai/dsh-client-locale@0.1.2-rc.1
-            '@deepseek-ai/dsh-client-ui-conversation': npm:@deepseek-ai/dsh-client-ui-conversation@0.1.2-rc.1
-            '@deepseek-ai/dsh-client-ui-primitives': npm:@deepseek-ai/dsh-client-ui-primitives@0.1.2-rc.1
-            '@deepseek-ai/dsh-client-ui-renderer': npm:@deepseek-ai/dsh-client-ui-renderer@0.1.2-rc.1
-            '@deepseek-ai/dsh-client-ui-settings': npm:@deepseek-ai/dsh-client-ui-settings@0.1.2-rc.1
-            '@deepseek-ai/dsh-client-ui-slots': npm:@deepseek-ai/dsh-client-ui-slots@0.1.2-rc.1
-            '@deepseek-ai/dsh-home-paths': npm:@deepseek-ai/dsh-home-paths@0.1.2-rc.1
-            '@deepseek-ai/dsh-host-webserver': npm:@deepseek-ai/dsh-host-webserver@0.1.2-rc.1
-            '@deepseek-ai/dsh-llm': npm:@deepseek-ai/dsh-llm@0.1.2-rc.1
-            '@deepseek-ai/dsh-permission-presets': npm:@deepseek-ai/dsh-permission-presets@0.1.2-rc.1
-            '@deepseek-ai/dsh-sandbox-policy': npm:@deepseek-ai/dsh-sandbox-policy@0.1.2-rc.1
-            '@deepseek-ai/dsh-session': npm:@deepseek-ai/dsh-session@0.1.2-rc.1
-            '@deepseek-ai/dsh-session-query': npm:@deepseek-ai/dsh-session-query@0.1.2-rc.1
-            '@deepseek-ai/dsh-settings': npm:@deepseek-ai/dsh-settings@0.1.2-rc.1
-            '@deepseek-ai/dsh-workspace': npm:@deepseek-ai/dsh-workspace@0.1.2-rc.1
-          EOF
-
+      # The lockfile and exact dev dependencies target DSH 0.1.7-alpha.1.
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Typecheck
         run: pnpm typecheck

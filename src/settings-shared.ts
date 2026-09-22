@@ -1,13 +1,10 @@
 /**
  * Shared side-chat preference vocabulary (types + constants), consumed by
- * BOTH halves: the host registers the schemastery schema over these values
+ * BOTH halves: the host exports a live Config schema over these values
  * (index.ts) and the client reads/writes them through the plugin's own
  * fenced /sidechat settings routes. Kept free of schemastery so the browser
  * bundle never pulls the schema runtime in.
  */
-
-/** The user-settings namespace holding the side-chat preferences. */
-export const SUBCHAT_PREFS_NS = 'dsh-side-chat'
 
 /** How a brought-back reply lands in the main conversation. */
 export type BringMode = 'draft' | 'context'

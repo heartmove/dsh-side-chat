@@ -72,7 +72,12 @@ export interface SideSessionSummary {
 
 /** The session list snapshot the browser half subscribes to. */
 export interface SideSessionList {
-  current: string | undefined
+  /**
+   * The selected session id. Present through DSH 0.1.6-alpha.1; 0.1.6-alpha.2
+   * moved the selection out of the list store (multi-instance Client Sessions),
+   * so it is optional here and read through {@link SideUiSessionService} instead.
+   */
+  current?: string | undefined
   byId: Record<string, SideSessionSummary>
 }
 
@@ -119,10 +124,44 @@ export interface SideSessionsService {
   scope(id: string): Context | undefined
 }
 
-/** The client UI-session service face (per-session pending interactions). */
+/** Minimal standard binding of one Session scope (`uiSession.adapter.current`). */
+export interface SideScopeBinding {
+  /** The bound session id; absent while no Session is selected. */
+  readonly key: string | undefined
+}
+
+/** One Session's UI status row (DSH 0.1.6-alpha.2+). */
+export interface SideSessionStatus {
+  /** Highest-precedence pending interaction awaiting the user, if any. */
+  readonly pendingInteraction?: SidePendingInteraction
+}
+
+/** The client UI-session service face (current Session binding + pending interactions). */
 export interface SideUiSessionService {
-  /** Per-session pending UI interaction (question / plan-review / approval). */
-  pendingInteractions: SidePendingInteractionStore
+  /**
+   * Pre-0.1.6-alpha.2 per-session pending-interaction feed. Removed in
+   * 0.1.6-alpha.2, where the interaction moved onto {@link sessionStatus}.
+   */
+  pendingInteractions?: SidePendingInteractionStore
+  /**
+   * DSH 0.1.6-alpha.2+ unified Session UI status. The pending interaction is
+   * `getSnapshot().get(sessionId)?.pendingInteraction`.
+   */
+  sessionStatus?: {
+    getSnapshot(): ReadonlyMap<string, SideSessionStatus>
+    subscribe(fn: () => void): () => void
+  }
+  /**
+   * Default Session-scope binding (including its absent projection). Its
+   * `current.key` is the selected Session id — the post-0.1.6-alpha.2 home of
+   * the selection the sessions list no longer carries.
+   */
+  adapter?: {
+    current: {
+      getSnapshot(): SideScopeBinding
+      subscribe(fn: () => void): () => void
+    }
+  }
 }
 
 /** Agent options (provider/model/maxTokens). */
@@ -193,9 +232,19 @@ export interface SideModelSelectionRef {
  */
 export type SideInstallModelSelection = (agentCtx: Context, selection: SideModelSelectionRef) => () => void
 
-/** The workspace registry face (archive a session durably). */
+/**
+ * The workspace registry face. `archiveSession` hides a session from every
+ * grouping surface; `unarchiveSession` (0.1.6+) restores it. Both are writable
+ * through the registry's serialized operation queue.
+ */
 export interface SideWorkspaceRegistry {
   archiveSession(sessionId: string): Promise<void>
+  /**
+   * Restore one archived session. The plugin lifts the archive for exactly as
+   * long as a side-chat turn has to run: DSH 0.1.7 rejects `agent/pre-step` for
+   * an archived session, so an archived side chat can never answer.
+   */
+  unarchiveSession?(sessionId: string): Promise<void>
 }
 
 /** `sessionQuery.readSession` snapshot. */
@@ -295,9 +344,9 @@ export interface SideLocaleService {
   register(ns: string, locale: string, dict: Record<string, string>): () => void
 }
 
-/** The host settings service face (namespace registration + read/write). */
+/** DSH 0.1.7 profile-entry settings forms. */
 export interface SideSettingsService {
-  register(ns: unknown, schema: unknown): { get(): unknown; watch(cb: (next: unknown, prev: unknown) => void): () => void }
+  configure(presentation: { auto?: boolean }, owner?: Context['fiber']): () => void
   describe(opts: { redactSecrets?: boolean }): Array<{ ns: unknown; value?: unknown; revision?: number }>
   update(ns: unknown, patch: Record<string, unknown>, expectedRevision?: number): Promise<void>
 }
@@ -328,7 +377,12 @@ export interface SideSidebarRightTabs {
 
 /** The cross-plugin right-sidebar face (`ctx.sidebarRight`, ui-sidebar-right). */
 export interface SideSidebarRight {
-  tabs: SideSidebarRightTabs
+  /**
+   * The controller's tab registry. TypeScript-private upstream (it works at
+   * runtime, but the standalone `sidebarRightTabs` service is the public
+   * home), so optional here.
+   */
+  tabs?: SideSidebarRightTabs
   /** Open a page type by kind in the mounted session; reveals the column. */
   openTab(kind: string, options?: { paneId?: string; replaceTab?: boolean; revealIfOpened?: boolean }): void
 }
