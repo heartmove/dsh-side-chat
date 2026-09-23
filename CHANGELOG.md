@@ -1,3 +1,15 @@
+# 0.4.1
+
+- 修复「插件设置页偏好读写失效」的问题（0.4.1-alpha.1 引入）。此前插件从 `ctx.entry` 取自身 Loader entry id，
+  但 Cordis 的受控 Context 对未声明的属性会直接抛错（`cannot get property "entry" without inject`），
+  `ctx.inject(['settings'], …)` 回调在绑定设置服务前就中断，于是 `settings.get` 恒返回空值、
+  `settings.update` 恒返回 503 `settings-rejected`，设置页里的偏好保存静默失败。
+  现在改为从拥有该 fiber 的 entry 上取 namespace（`ctx.fiber.entry.options.id`，与官方 llm 插件一致），
+  并以 `loader.locate(fiber)` 作为兜底。
+- 已在真实的 Loader + config-editor + settings 组合中验证：`settings.describe()` 能列出本插件的 volatile 字段，
+  `/sidechat/api/settings.get` 返回当前偏好与 revision，`settings.update` 能到达设置服务并带正确的 namespace。
+- 新增 3 条设置 namespace 回归测试（fiber entry、裸挂载时降级为“偏好不可用但不报错”、loader 兜底）。
+
 # 0.4.1-alpha.1
 
 - 适配 DSH `0.1.7-alpha.1`，最低版本声明同步为 `^0.1.7-0`。

@@ -882,6 +882,40 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
   }
 }
 
+/**
+ * The Loader entry that owns a fiber, as the Loader records it. The owning
+ * entry lives on the FIBER (`fiber.entry = fiber.parent[Entry.key]` in
+ * cordis-plugin-loader), never as a plain `ctx.entry`; `Entry.options.id` is
+ * the raw configured id and `Entry.id` the nested-qualified one, and the
+ * settings service keys namespaces by the raw one
+ * (`configEditor.entries().find(row => row.options.id === ns)`).
+ */
+interface SideEntryOwner {
+  entry?: { id?: string; options?: { id?: string } }
+}
+
+/** The loader face this plugin needs to locate its own entry (best-effort). */
+interface SideLoaderFace {
+  locate?: (fiber?: unknown) => string | undefined
+}
+
+/**
+ * Resolve this plugin's settings namespace: the Loader entry id that owns the
+ * running fiber. Both reads are defensive because this package builds against
+ * its own cordis, so the upstream `Fiber.entry` augmentation is not visible
+ * here. `undefined` (no owning entry, e.g. a bare programmatic mount) leaves
+ * the settings face unbound: the plugin still runs, only its preferences stay
+ * unavailable instead of being written to a namespace nobody owns.
+ */
+function settingsNamespaceOf(ctx: Context): string | undefined {
+  const owner = (ctx.fiber as SideEntryOwner | undefined)?.entry
+  const fromFiber = owner?.options?.id ?? owner?.id
+  if (typeof fromFiber === 'string' && fromFiber !== '') return fromFiber
+  const loader = ctx.get('loader') as SideLoaderFace | undefined
+  const located = loader?.locate?.(ctx.fiber)
+  return typeof located === 'string' && located !== '' ? located : undefined
+}
+
 /** Read the connection row's trustedHosts, or empty (loopback-only fence). */
 function trustedHostsOf(ctx: Context): string[] {
   const loader = ctx.get('loader') as { entries?: () => Iterable<{ options: { name: string; config?: unknown } }> } | undefined
@@ -899,9 +933,10 @@ export function apply(ctx: Context): void {
   const sideChats = new Map<string, SidechatRecord>()
   let settingsFace: SubchatSettingsFace | undefined
 
-  // Settings namespaces are now Loader entry ids, including user-renamed rows.
+  // Settings namespaces are Loader entry ids, including user-renamed rows: the
+  // id is read off the owning fiber (see `settingsNamespaceOf`).
   ctx.inject(['settings'], (sctx: Context) => {
-    const ns = (ctx as Context & { entry?: { id: string } }).entry?.id
+    const ns = settingsNamespaceOf(ctx)
     if (ns === undefined) return
     sctx.effect(() => sctx.settings.configure({ auto: false }, ctx.fiber))
     const viewOf = (): { value?: unknown; revision?: number } => {

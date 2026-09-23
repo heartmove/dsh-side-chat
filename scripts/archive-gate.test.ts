@@ -51,8 +51,9 @@ function mount(options: { failUnarchive?: boolean } = {}): Harness {
   })
 
   const ctx: any = {
-    entry: { id: 'side-chat-entry' },
-    fiber: {},
+    // The Loader records the owning entry on the FIBER; a bare `ctx.entry` does
+    // not exist at runtime (see settingsNamespaceOf).
+    fiber: { entry: { options: { id: 'side-chat-entry' } } },
     get: () => undefined,
     inject: () => {},
     effect: (callback: () => unknown, label?: string) => {
