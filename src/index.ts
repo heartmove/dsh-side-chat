@@ -270,9 +270,16 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
         blocks.push({ type: 'text', text: part.text })
       } else {
         const data = decodeBase64(part.data)
-        await ctx.attachments.validateImage({ data, mediaType: part.mediaType, ...(part.name === undefined ? {} : { name: part.name }) })
-        const attachment = await ctx.attachments.saveImage({ data, mediaType: part.mediaType, ...(part.name === undefined ? {} : { name: part.name }) })
-        blocks.push({ type: 'image', attachment })
+        try {
+          await ctx.attachments.validateImage({ data, mediaType: part.mediaType, ...(part.name === undefined ? {} : { name: part.name }) })
+          const attachment = await ctx.attachments.saveImage({ data, mediaType: part.mediaType, ...(part.name === undefined ? {} : { name: part.name }) })
+          blocks.push({ type: 'image', attachment })
+        } catch (error) {
+          // The attachment store rejects a malformed/oversized image with its
+          // own error type; report it as a client-side bad request (400) rather
+          // than an unexplained host fault (500).
+          throw new SidechatError('bad-image', error instanceof Error ? error.message : String(error), 400)
+        }
       }
     }
     blocks.push({ type: 'text', text: lookupEnabled ? LOOKUP_GUIDANCE : NO_LOOKUP_GUIDANCE })
@@ -445,6 +452,10 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
     const content = requireContent(payload)
     const lookupEnabled = optionalBoolean(payload, 'lookupEnabled')
     const parent = parentOf(parentSessionId)
+    // Validate and durably store the prompt's images BEFORE the side chat
+    // exists: a rejected image must not leave a live, empty side chat (and a
+    // persisted record) behind for a request that never ran.
+    const blocks = await durableContent(content, lookupEnabled)
 
     const record = payload as { provider?: unknown; model?: unknown; reasoningEffort?: unknown; preset?: unknown }
     const parentConfig = parent.session.requestHeader?.()?.config
@@ -539,7 +550,7 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
     sideChats.set(childId, child)
     persist()
 
-    await deliver(child, userMessage(await durableContent(content, lookupEnabled)))
+    await deliver(child, userMessage(blocks))
     return { childId, provider, model, ...(reasoningEffort === undefined ? {} : { reasoningEffort }) }
   }
 
@@ -603,8 +614,15 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
   /** Fold one side chat's transcript. */
   const history = async (payload: unknown): Promise<{ messages: Array<{ role: 'user' | 'assistant'; blocks: TranscriptBlock[] }> }> => {
     const childId = requireString(payload, 'childId')
-    const snapshot = await ctx.sessionQuery.readSession(childId)
-    return { messages: foldTranscript(snapshot.events) }
+    let events: readonly SideSessionEvent[]
+    try {
+      events = (await ctx.sessionQuery.readSession(childId)).events
+    } catch (error) {
+      // A side chat whose session is gone (deleted, disposed, or an id from a
+      // previous run) is a client-side absence, not a host fault.
+      throw new SidechatError('not-found', error instanceof Error ? error.message : String(error), 404)
+    }
+    return { messages: foldTranscript(events) }
   }
 
   /** The deployment-resolved image policy (for client-side fast-path checks). */

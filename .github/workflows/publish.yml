@@ -35,7 +35,7 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: pnpm
 
-      # The lockfile and exact dev dependencies target DSH 0.1.7-alpha.1.
+      # The lockfile and exact dev dependencies target DSH 0.1.7-rc.1.
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

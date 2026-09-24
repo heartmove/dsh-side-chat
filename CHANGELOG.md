@@ -1,3 +1,22 @@
+# 0.4.3
+
+- 对照 DSH `0.1.7-rc.1` 做了一轮完整功能回归：宿主侧 `/sidechat/api` 的 start / followup / stop /
+  history / list / state / commands / summarize / inject / attachment / selectModel /
+  selectPermission / settings.get / settings.update / dispose 全部实测通过；「推理期间临时取消归档、
+  本轮结束恢复归档」的门禁流程在 rc.1 上仍按要求工作（侧边会话不出现在会话列表）。
+- 修复「右侧栏服务缺失时侧边聊天彻底不可用」：默认偏好是停靠新版右侧栏，但部署里没有
+  `sidebarRight` / `sidebarRightTabs` 服务时，此前只写一条“已回退为浮动面板”的错误提示，既不注册
+  停靠入口、也不渲染浮动面板——而提示本身就在面板里，用户什么也看不到。现在真的回退到经典浮动
+  面板，提示只用于解释停靠偏好为何未生效。
+- 修复「启动失败会留下幽灵侧边聊天」：`sidechat.start` 原先先创建并持久化侧边会话、再校验提示里的
+  图片，图片被拒时既返回 500，又留下一个没有任何消息的侧边聊天（写入记录，之后还会被复用）。
+  现在图片在创建会话之前处理，失败返回 400 `bad-image`，且不创建任何会话。
+- `sidechat.history` 对不存在或已删除的侧边聊天返回 404 `not-found`，不再把这种正常的客户端缺席
+  报成 500 `internal`。
+- 开发依赖与 CI 对齐到 `0.1.7-rc.1`（此前 `0.1.7-alpha.1`）；typecheck、构建（含
+  `check-seed-exports` 对真实 DSH 安装的校验）与测试均在 rc.1 类型下通过。
+- 新增 3 条回归测试：图片被拒不留会话且 list 为空、history 返回 404、合法图片仍能正常启动。
+
 # 0.4.2
 
 - 0.4.1 被 CI 从「修复提交之前」的提交打包发布（tag 先指向旧提交、随后才被强制更新），因此 npm 上的 0.4.1

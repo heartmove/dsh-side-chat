@@ -1,6 +1,6 @@
 # dsh-side-chat — 侧边聊天 (Side chat)
 
-Targets DSH **0.1.7-alpha.1**. See [compatibility changes](CHANGELOG.md).
+Targets DSH **0.1.7-rc.1**. See [compatibility changes](CHANGELOG.md).
 
 An **enhanced version of a Codex-style side chat** for
 [DSH](https://www.deepseek.com): a dedicated, agentic chat in a right-side
@@ -106,7 +106,7 @@ and you never have to answer before you're ready.
 
 - [Node.js](https://nodejs.org) ≥ 20
 - [pnpm](https://pnpm.io)
-- DSH `0.1.7-alpha.1` (`^0.1.7-0`).
+- DSH `0.1.7-rc.1` (`^0.1.7-0`).
 - `pnpm build` ends with `check-seed-exports`, which compares the client
   bundle's frozen-module-table imports against a real DSH install. Set
   `DSH_INSTALL` (or pass `--shell`) when the install is not discoverable via
@@ -139,7 +139,7 @@ The package name is `dsh-side-chat-plus` (the plain `dsh-side-chat` name on npm
 belongs to a different maintainer, so the release is published under the
 `-plus` name).
 
-> **Registry dependencies.** Local and CI builds use exact DSH `0.1.7-alpha.1` development dependencies and the checked-in lockfile. No local harness checkout or CI-only overrides are required.
+> **Registry dependencies.** Local and CI builds use exact DSH `0.1.7-rc.1` development dependencies and the checked-in lockfile. No local harness checkout or CI-only overrides are required.
 
 ## Deploy
 

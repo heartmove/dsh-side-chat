@@ -90,6 +90,12 @@ interface SidechatSnapshot {
   mainQuestion: SideQuestionItem[] | null
   /** Question ids the user deleted from the panel list. */
   dismissedQuestionIds: string[]
+  /**
+   * Whether this deployment offers the built-in right sidebar. False means
+   * `panelHome: 'sidebar-right'` cannot be honoured and the panel falls back to
+   * the classic floating container instead of becoming unreachable.
+   */
+  dockAvailable: boolean
 }
 
 /** The whole browser-side store (one per activation). */
@@ -106,6 +112,8 @@ interface SidechatStore {
   closePanel(): void
   /** Install (or clear) the dock-mode launcher; openPanel() fires it after opening. */
   setDockLaunch(fn: (() => void) | null): void
+  /** Record whether the built-in right sidebar exists in this deployment. */
+  setDockAvailable(available: boolean): void
   setActive(childId: string): void
   patch(partial: Partial<PanelState>): void
 }
@@ -143,6 +151,10 @@ function createStore(): SidechatStore {
   let prefs: SubchatPrefs = { ...SUBCHAT_PREFS_DEFAULTS }
   let mainQuestion: SideQuestionItem[] | null = null
   let dismissedQuestionIds: string[] = []
+  // Optimistic until the dock effect has inspected the services: a deployment
+  // whose sidebar services are missing flips this to false and the panel
+  // renders floating instead of nowhere.
+  let dockAvailable = true
   // Per-conversation panel state so switching away and back restores the side
   // chats instead of resetting them. The side chats stay live on the host, so
   // the client must remember each conversation's open panel + active child.
@@ -153,10 +165,10 @@ function createStore(): SidechatStore {
   let dockLaunch: (() => void) | null = null
   // Cached snapshot: useSyncExternalStore compares identity, so the object is
   // only rebuilt on a mutation — never inside getSnapshot itself.
-  let snapshot: SidechatSnapshot = { current, panel, anchor, prefs, mainQuestion, dismissedQuestionIds }
+  let snapshot: SidechatSnapshot = { current, panel, anchor, prefs, mainQuestion, dismissedQuestionIds, dockAvailable }
 
   const notify = (): void => {
-    snapshot = { current, panel, anchor, prefs, mainQuestion, dismissedQuestionIds }
+    snapshot = { current, panel, anchor, prefs, mainQuestion, dismissedQuestionIds, dockAvailable }
     for (const fn of [...listeners]) fn()
   }
 
@@ -213,6 +225,11 @@ function createStore(): SidechatStore {
     },
     setDockLaunch(fn) {
       dockLaunch = fn
+    },
+    setDockAvailable(available) {
+      if (available === dockAvailable) return
+      dockAvailable = available
+      notify()
     },
     setActive(childId) {
       panel = { ...panel, activeChildId: childId, messages: [], error: null }
@@ -1755,7 +1772,7 @@ function SideChatShell(props: {
           onOpen={() => { props.store.openPanel(snap.panel.parentSessionId) }}
         />
       )}
-      {snap.prefs.panelHome === 'floating' && (
+      {(snap.prefs.panelHome === 'floating' || !snap.dockAvailable) && (
         <SidechatPanel
           store={props.store}
           t={props.t}
@@ -2187,9 +2204,14 @@ export function apply(ctx: Context): void {
           ?? sidebarRight?.tabs
         if (sidebarRight === undefined || sidebarRightTabs === undefined) {
           phase = 'unavailable'
+          // The floating container takes over (SideChatShell renders it while
+          // `dockAvailable` is false); the notice only explains why the dock
+          // preference is not in effect.
+          store.setDockAvailable(false)
           store.patch({ error: translate(activeLocale, 'dock.unavailable') })
           return
         }
+        store.setDockAvailable(true)
         const dockT = (key: SidechatLocaleKey): string => translate(activeLocale, key)
 
         const disposeType = sidebarRightTabs.register({

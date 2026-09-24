@@ -1,6 +1,6 @@
 # dsh-side-chat — 侧边聊天（Side chat）
 
-当前适配 DSH **0.1.7-alpha.1**，详见[兼容性变更](CHANGELOG.md)。
+当前适配 DSH **0.1.7-rc.1**，详见[兼容性变更](CHANGELOG.md)。
 
 一个 [DSH](https://www.deepseek.com) 网页插件，**Codex 式侧边聊天的强化版本**：
 在右侧面板提供按主会话隔离的独立聊天，具备 Codex 式的智能体能力——继承主会话的
@@ -71,7 +71,7 @@ Codex 式能力之上，额外支持针对当前**问题弹框**的侧边聊天�
 
 - [Node.js](https://nodejs.org) ≥ 20
 - [pnpm](https://pnpm.io)
-- DSH `0.1.7-alpha.1` (`^0.1.7-0`).
+- DSH `0.1.7-rc.1` (`^0.1.7-0`).
 - `pnpm build` 最后会跑 `check-seed-exports`：把客户端 bundle 对冻结模块表的
   引用与一份真实 DSH 安装做比对。若 `dsh` 不在 `PATH` 上而探测不到安装目录，
   可设 `DSH_INSTALL`（或传 `--shell`）；找不到目标时会跳过而不是失败。
@@ -99,7 +99,7 @@ pnpm build
 
 包名为 `dsh-side-chat-plus`（npm 上的裸名 `dsh-side-chat` 属于另一维护者，因此发布以 `-plus` 命名）。
 
-> **registry 依赖说明。** 本地和 CI 使用精确的 DSH `0.1.7-alpha.1` 开发依赖和同一份锁文件，无需本地 harness checkout 或 CI 专用 overrides。
+> **registry 依赖说明。** 本地和 CI 使用精确的 DSH `0.1.7-rc.1` 开发依赖和同一份锁文件，无需本地 harness checkout 或 CI 专用 overrides。
 
 ## 部署
 
