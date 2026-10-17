@@ -35,7 +35,7 @@ import type {
   SideSessionEvent,
 } from './context-types.ts'
 import { SUBCHAT_PREFS_DEFAULTS, type SubchatPrefs } from './settings-shared.ts'
-import { isTrustedApiRequest } from './trust-fence.ts'
+import { DEFAULT_TRUST_PROTOCOL, isTrustedApiRequest, type ApiTrustProtocol } from './trust-fence.ts'
 import { optionalBoolean, readJsonBody, requireString, SidechatError, writeError, writeJson, writeOk } from './wire.ts'
 
 /** Plugin identity for cordis.yml rows. */
@@ -912,9 +912,24 @@ interface SideEntryOwner {
   entry?: { id?: string; options?: { id?: string } }
 }
 
-/** The loader face this plugin needs to locate its own entry (best-effort). */
+/** One configured Loader row, as much of it as this plugin reads. */
+interface SideLoaderEntry {
+  options?: {
+    id?: string
+    name?: string
+    config?: unknown
+  }
+}
+
+/** The loader face this plugin needs (own-entry lookup + trust authorities). */
 interface SideLoaderFace {
   locate?: (fiber?: unknown) => string | undefined
+  entries?: () => Iterable<SideLoaderEntry>
+}
+
+/** The `webStartup` service face (invocation values DSH resolves from flags). */
+interface SideWebStartupFace {
+  trustedHosts?: unknown
 }
 
 /**
@@ -934,16 +949,59 @@ function settingsNamespaceOf(ctx: Context): string | undefined {
   return typeof located === 'string' && located !== '' ? located : undefined
 }
 
-/** Read the connection row's trustedHosts, or empty (loopback-only fence). */
+/** The Loader row id and package specifier of DSH's /api connection plugin. */
+const CONNECTION_ENTRY_ID = 'connection'
+const CONNECTION_PLUGIN_NAME = '@deepseek-ai/dsh-client-connection'
+
+/**
+ * Declared non-loopback authorities this deployment serves.
+ *
+ * DSH 0.2.1-rc.1 made `webStartup.trustedHosts` — one entry per `--trusted-host`
+ * value — the source its /api fence reads. The 0.2.0 line instead resolved
+ * `webRuntime.trustedHosts` (the invocation values plus LAN literals derived
+ * from the active bind) into the `connection` row's config, so both are read
+ * and merged: the service first, the row as the fallback that keeps 0.2.0
+ * deployments working.
+ *
+ * Only a string array is accepted. A Loader row retains `!!js` expressions
+ * unevaluated (`Entry.options.config` is the raw node, not the value the fiber
+ * receives), so a non-array must never reach the fence — it would make the
+ * authority comparison throw instead of refusing the request.
+ */
 function trustedHostsOf(ctx: Context): string[] {
-  const loader = ctx.get('loader') as { entries?: () => Iterable<{ options: { name: string; config?: unknown } }> } | undefined
-  for (const entry of loader?.entries?.() ?? []) {
-    if (entry.options.name === 'connection') {
-      const config = entry.options.config as { trustedHosts?: string[] } | undefined
-      return config?.trustedHosts ?? []
+  const hosts = new Set<string>()
+  const collect = (value: unknown): void => {
+    if (!Array.isArray(value)) return
+    for (const entry of value) {
+      if (typeof entry === 'string' && entry !== '') hosts.add(entry)
     }
   }
-  return []
+  collect((ctx.get('webStartup') as SideWebStartupFace | undefined)?.trustedHosts)
+  const loader = ctx.get('loader') as SideLoaderFace | undefined
+  for (const entry of loader?.entries?.() ?? []) {
+    const options = entry.options
+    if (options?.id !== CONNECTION_ENTRY_ID && options?.name !== CONNECTION_PLUGIN_NAME) continue
+    collect((options.config as { trustedHosts?: unknown } | undefined)?.trustedHosts)
+  }
+  return [...hosts]
+}
+
+/**
+ * The listener's own bind IP literal (DSH 0.2.1-rc.1 fence input). Read from the
+ * webserver service so `--host 10.0.0.7` stays reachable even though the literal
+ * is deliberately outside `trustedHosts`.
+ */
+function bindHostOf(ctx: Context): string | undefined {
+  const host = ctx.webServer?.host
+  return typeof host === 'string' && host !== '' ? host : undefined
+}
+
+/**
+ * The listener protocol the fence normalizes default Host ports with. Absent
+ * before DSH 0.2.1-rc.1 (HTTP-only listeners), where the HTTP default applies.
+ */
+function listenerProtocolOf(ctx: Context): ApiTrustProtocol {
+  return ctx.webServer?.protocol === 'https:' ? 'https:' : DEFAULT_TRUST_PROTOCOL
 }
 
 /** Host plugin body: register the /sidechat JSON API routes. */
@@ -1021,7 +1079,7 @@ export function apply(ctx: Context): void {
     kind: 'prefix',
     path: '/sidechat/api',
     handler: async (req, res) => {
-      if (!isTrustedApiRequest(req, trustedHostsOf(ctx))) {
+      if (!isTrustedApiRequest(req, trustedHostsOf(ctx), bindHostOf(ctx), listenerProtocolOf(ctx))) {
         writeJson(res, 403, { ok: false, error: { code: 'forbidden', message: 'forbidden' } })
         return
       }

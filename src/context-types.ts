@@ -23,6 +23,18 @@ export interface SideWebRoute {
 /** The webServer service face this plugin uses. */
 export interface SideWebServer {
   register(route: SideWebRoute): () => void
+  /**
+   * The configured bind address (one concrete local interface). Present since
+   * the 0.2.0 line; DSH 0.2.1-rc.1 made the /api fence accept this literal
+   * independently of `trustedHosts`, and this plugin's fence follows.
+   */
+  readonly host?: string
+  /**
+   * The protocol the listener speaks. DSH 0.2.1-rc.1 added it together with
+   * `--tls-cert`/`--tls-key`; absent on earlier lines, where HTTP is the only
+   * listener.
+   */
+  readonly protocol?: 'http:' | 'https:'
 }
 
 /** A published session's header slice (authoritative cwd, lineage, origin). */

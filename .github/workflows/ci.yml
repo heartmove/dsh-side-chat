@@ -31,7 +31,8 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
 
-      # The lockfile and exact dev dependencies target DSH 0.1.7-rc.1.
+      # The lockfile and exact dev dependencies target DSH 0.2.1-rc.1; the
+      # declared support window is the open range >=0.2.1-rc.1.
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

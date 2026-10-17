@@ -1,6 +1,6 @@
 # dsh-side-chat — 侧边聊天（Side chat）
 
-当前适配 DSH **0.1.7-rc.1**，详见[兼容性变更](CHANGELOG.md)。
+当前适配 DSH **0.2.1-rc.1 及之后的版本**（已在 **0.2.1-rc.1** 上验证），详见[兼容性变更](CHANGELOG.md)。
 
 一个 [DSH](https://www.deepseek.com) 网页插件，**Codex 式侧边聊天的强化版本**：
 在右侧面板提供按主会话隔离的独立聊天，具备 Codex 式的智能体能力——继承主会话的
@@ -71,10 +71,17 @@ Codex 式能力之上，额外支持针对当前**问题弹框**的侧边聊天�
 
 - [Node.js](https://nodejs.org) ≥ 20
 - [pnpm](https://pnpm.io)
-- DSH `0.1.7-rc.1` (`^0.1.7-0`).
+- DSH `0.2.1-rc.1` 或更新版本。依赖声明是开区间 `>=0.2.1-rc.1`：DSH 以
+  `includePrerelease` 校验 peer 范围，因此该预发布版本与之后的所有版本都在范围内
+  （caret 或精确锁定会把新版本挡在门外，见 [AGENTS.md](./AGENTS.md)）。0.5.0 把下限
+  移到 `0.2.1-rc.1`：该版本改变了本插件镜像的 `/api` 信任栅栏（监听绑定字面量、
+  按协议归一化端口、`trustedHosts` 改由 `webStartup` 提供）。
 - `pnpm build` 最后会跑 `check-seed-exports`：把客户端 bundle 对冻结模块表的
   引用与一份真实 DSH 安装做比对。若 `dsh` 不在 `PATH` 上而探测不到安装目录，
   可设 `DSH_INSTALL`（或传 `--shell`）；找不到目标时会跳过而不是失败。
+- 之后还会跑 `check-dsh-compat`（也可单独执行 `pnpm check:dsh`）：要求每个
+  `@deepseek-ai/dsh*` peer 都是单一开区间 `>=<floor>`、所有 peer 共用同一个 floor、
+  且与 `dsh.plugin.json` 的 `engines.dsh` 一致，并校验 floor 不高于被测的 DSH 运行时。
 
 ## 构建
 
@@ -99,7 +106,7 @@ pnpm build
 
 包名为 `dsh-side-chat-plus`（npm 上的裸名 `dsh-side-chat` 属于另一维护者，因此发布以 `-plus` 命名）。
 
-> **registry 依赖说明。** 本地和 CI 使用精确的 DSH `0.1.7-rc.1` 开发依赖和同一份锁文件，无需本地 harness checkout 或 CI 专用 overrides。
+> **registry 依赖说明。** 本地和 CI 使用精确的 DSH `0.2.1-rc.1` 开发依赖和同一份锁文件，无需本地 harness checkout 或 CI 专用 overrides。
 
 ## 部署
 
@@ -107,6 +114,12 @@ DSH web 从当前 profile 加载外部插件。本包是一个 **bundle**：它�
 `package.json` 声明了 `dsh.bundle.patch` → [`cordis.patch.yml`](./cordis.patch.yml)，
 其中的 `insert` 条目用于挂载插件。正是这个声明让 `dsh plugin add` 能一步完成
 「安装 + 激活」。
+
+> **信任边界。** `/sidechat/api/*` 与 DSH 自己的 `/api` 使用同一套栅栏：loopback、
+> 监听器自身的绑定地址，或通过 `--trusted-host` 声明的 authority 三者之一放行；
+> 跨站标记与不匹配的 `Origin` 一律拒绝。但栅栏不是身份认证——DSH 的 `/api` 还额外
+> 要求浏览器会话 cookie，而本插件的路由服务于同一个已认证页面，不会重复校验。
+> 对外暴露前请保持 loopback，或置于带认证的反向代理之后。
 
 > **推荐：从 npm 安装。** 本包已发布到 [npm](https://www.npmjs.com/package/dsh-side-chat-plus)，
 > 名为 `dsh-side-chat-plus`，因此 `dsh plugin add` 无需源码 checkout——tarball 自带预构建的

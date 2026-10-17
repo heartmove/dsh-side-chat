@@ -1,3 +1,66 @@
+# 0.5.0
+
+对照 DSH **0.2.1-rc.1** 的 release notes 做的一轮兼容性修复。该版本改写了 `/api` 的
+浏览器信任栅栏（`dsh-client-connection` 的 `api-request-trust`），本插件此前照抄的是
+0.2.0 线的版本，因此需要跟进。
+
+- **修复「非 loopback 部署下 `/sidechat/api` 全部 403」**：0.2.1-rc.1 起，fence 除了
+  loopback 与声明的 `trustedHosts`，还接受**监听器自己的绑定 IP 字面量**（`--host 10.0.0.7`
+  后用该地址访问）；0.2.0 线是把 LAN 字面量折进 `trustedHosts` 实现的。此前本插件只看
+  authority 列表，`--host <LAN IP>` 场景下 DSH 自己的 `/api` 放行、侧边聊天却全被拒。
+  现在按上游语义把绑定地址与监听协议一并传给 fence。
+- **修复 `trustedHosts` 一直读成空数组**：旧代码按 `entry.options.name === 'connection'`
+  匹配 Loader 行，而该行的 `name` 是 `@deepseek-ai/dsh-client-connection`（`connection`
+  是 `id`）——匹配永远不命中，`--trusted-host` 因此从未生效。现在优先读
+  `webStartup.trustedHosts`（0.2.1-rc.1 起 `/api` fence 的权威来源），并保留
+  `connection` 行 config 作为 0.2.0 线的回退，两者取并集。
+- **修复未求值的 `!!js` 配置让 fence 抛异常**：Loader 行的 `options.config` 保留原始节点
+  （`trustedHosts: !!js ctx.webStartup.trustedHosts` 不会就地求值），旧代码把它当数组用，
+  非 loopback 请求会在 `trustedHosts.some` 上抛 TypeError。现在只接受字符串数组。
+- **Host/Origin 按监听协议归一化**：0.2.1-rc.1 支持 `--tls-cert`/`--tls-key`，默认端口要按
+  实际服务的 scheme 剥离（HTTPS 监听下 `Host: app.internal` 与 `Origin: https://app.internal`
+  归一化一致）。fence 行为现与上游逐条对齐，并新增 `scripts/trust-fence.test.ts`
+  （6 条）与 3 条宿主侧集成测试覆盖绑定字面量、`webStartup`/`connection` 两个来源与
+  `!!js` 节点。
+- **适配 0.2.1-rc.1 的插件页元信息**：新版 `dsh-app-boot` 的 `readPluginMeta` 从
+  `<包>/locale/<lang>.json`（`meta.title` / `meta.description`）与 `<包>/icon` 读取显示
+  文本和图标。新增 `locale/en.json`、`locale/zh-hans.json` 与 `assets/icon.svg`，并在
+  `package.json` 的 `exports` 中导出 `./icon` 与 `./locale/*`（`files` 同步）。
+  已用真实运行时的 `readPluginMeta` 实测返回中英标题、描述与内联图标。
+- **客户端防重复挂载**：0.2.1-rc.1 支持就地重载可替换插件（HMR），客户端 bundle 工厂可能
+  在同一文档里再跑一次；挂载面板前先清掉上一次遗留的 `[data-dsh-side-chat]` 宿主节点。
+- **下限上移到 `0.2.1-rc.1`**：所有 dsh peer 与 `dsh.plugin.json` 的 `engines.dsh` 统一为
+  `>=0.2.1-rc.1`（按 AGENTS.md 规则 3：DSH 的破坏性变更迫使本插件改代码并重新发布时，
+  floor 抬到该变更所在的最低版本）。开发依赖、锁文件与 CI 同步到 `0.2.1-rc.1`；
+  `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude` 保留 0.2.0 两版条目，便于随时回切复验。
+- 验证：`pnpm typecheck`、22 条测试、`pnpm build`（含对 0.2.1-rc.1 真实 web shell 的
+  `check-seed-exports` 与 `check-dsh-compat`）全绿；另在本机 0.2.1-rc.1 运行时上实测
+  `settings.get` / `sidechat.directory` / `sidechat.limits` / `sidechat.permissions` 与
+  `evaluatePluginCompatibility` 判定兼容。
+
+# 0.4.4
+
+- **npm 上的 0.4.3 及更早版本在 DSH 0.2.0-rc.x 上装不上**：那些 tarball 里的 peer 仍是
+  `^0.1.7-0`，会被 `dsh: installation rejected: Plugin dsh-side-chat-plus@0.4.3 is
+  incompatible with dsh 0.2.0-rc.2` 拒装（安装随后回滚，profile 不会残留）。请使用
+  **0.4.4 或更高版本**。
+- **兼容性窗口改为开区间。** 所有 `@deepseek-ai/dsh*` peer 统一声明为 `>=0.2.0-rc.1`，
+  `dsh.plugin.json` 的 `engines.dsh` 同步。此前提交里写的是 `^0.1.7-0`，而 DSH 用
+  `semver.satisfies(runtime, range, { includePrerelease: true })` 校验 peer，
+  caret 是闭区间（上界 `0.2.0`）：连 `0.2.0-rc.1` / `0.2.0-rc.2` 都会被判为不兼容。
+  同 profile 的 `dsh-session-bridge@0.4.0` 正是因此被桌面版 0.2.0-rc.2
+  拒装（`dsh: installation rejected: Plugin … is incompatible with dsh 0.2.0-rc.2`）。
+  现在 `0.2.0-rc.1` 及之后的所有版本（含预发布）都会被接受。
+- 开发依赖与 CI 从 `0.2.0-rc.1` 提到 `0.2.0-rc.2`，并用 DSH 自带的前置校验
+  （`dsh-app-boot` 的 `evaluatePluginCompatibility`）在本仓库清单上实测：0.2.0-rc.2
+  下判定为**兼容**。
+- 新增 `scripts/check-dsh-compat.mjs`（`pnpm check:dsh`，并挂在 `pnpm build` 末尾）：
+  强制每个 dsh peer 是单一开区间 `>=<floor>`、共用同一个 floor、与 `engines.dsh`
+  一致，且 floor 不高于被测 DSH 运行时；`^`／精确锁定／上界／多 floor 都会让构建失败。
+- 在 `>=0.2.0-rc.1` 下限上以同一份源码跑通 typecheck、13 条测试与构建（含对 0.2.0-rc.2
+  真实 web shell 的冻结模块表校验），并在 0.2.0-rc.2 下复跑通过。
+- 兼容性规则与验证步骤写入 [AGENTS.md](./AGENTS.md)；README/CI 注释中的 DSH 版本说明同步更新。
+
 # 0.4.3
 
 - 对照 DSH `0.1.7-rc.1` 做了一轮完整功能回归：宿主侧 `/sidechat/api` 的 start / followup / stop /

@@ -2278,6 +2278,10 @@ export function apply(ctx: Context): void {
 
   // Mount the portalled tree onto document.body.
   ctx.effect(() => {
+    // DSH 0.2.1-rc.1 reloads a replaceable plugin in place, so this factory can
+    // run again in the same document; drop any host a previous mount left
+    // behind before mounting, or the panel would be rendered twice.
+    for (const stale of document.querySelectorAll('[data-dsh-side-chat]')) stale.remove()
     const host = document.createElement('div')
     host.setAttribute('data-dsh-side-chat', '')
     document.body.appendChild(host)

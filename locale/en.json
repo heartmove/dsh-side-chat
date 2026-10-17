@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Side chat Plus",
+    "description": "Select text in a conversation and ask it in a per-session side chat: a hidden ordinary session in its own right-side panel, inheriting the model, reasoning effort, and permissions of the conversation that launched it."
+  }
+}

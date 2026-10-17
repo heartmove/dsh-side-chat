@@ -1,6 +1,6 @@
 # dsh-side-chat — 侧边聊天 (Side chat)
 
-Targets DSH **0.1.7-rc.1**. See [compatibility changes](CHANGELOG.md).
+Targets DSH **0.2.1-rc.1 and newer** (verified against **0.2.1-rc.1**). See [compatibility changes](CHANGELOG.md).
 
 An **enhanced version of a Codex-style side chat** for
 [DSH](https://www.deepseek.com): a dedicated, agentic chat in a right-side
@@ -106,11 +106,21 @@ and you never have to answer before you're ready.
 
 - [Node.js](https://nodejs.org) ≥ 20
 - [pnpm](https://pnpm.io)
-- DSH `0.1.7-rc.1` (`^0.1.7-0`).
+- DSH `0.2.1-rc.1` or newer. The declared window is the open range
+  `>=0.2.1-rc.1`: DSH validates peer ranges with `includePrerelease`, so that
+  prerelease and every later version are inside it (a caret or an exact pin
+  locks newer runtimes out — see [AGENTS.md](./AGENTS.md)). The floor moved to
+  `0.2.1-rc.1` with 0.5.0 because that release changed the `/api` trust fence
+  this plugin mirrors (listener bind literals, protocol-normalized ports, and
+  `trustedHosts` resolved from `webStartup`).
 - `pnpm build` ends with `check-seed-exports`, which compares the client
   bundle's frozen-module-table imports against a real DSH install. Set
   `DSH_INSTALL` (or pass `--shell`) when the install is not discoverable via
   `dsh` on `PATH`; without a target the check skips instead of failing.
+- It then runs `check-dsh-compat` (also available as `pnpm check:dsh`): every
+  `@deepseek-ai/dsh*` peer must be a single open lower bound `>=<floor>`, all
+  peers must share one floor, that floor must match `dsh.plugin.json`'s
+  `engines.dsh`, and it must not be newer than the DSH runtime under test.
 
 ## Build
 
@@ -139,7 +149,7 @@ The package name is `dsh-side-chat-plus` (the plain `dsh-side-chat` name on npm
 belongs to a different maintainer, so the release is published under the
 `-plus` name).
 
-> **Registry dependencies.** Local and CI builds use exact DSH `0.1.7-rc.1` development dependencies and the checked-in lockfile. No local harness checkout or CI-only overrides are required.
+> **Registry dependencies.** Local and CI builds use exact DSH `0.2.1-rc.1` development dependencies and the checked-in lockfile. No local harness checkout or CI-only overrides are required.
 
 ## Deploy
 
@@ -148,6 +158,14 @@ DSH web loads external plugins from the active profile. This package is a
 [`cordis.patch.yml`](./cordis.patch.yml), whose `insert` row mounts the plugin.
 That declaration is what lets `dsh plugin add` install the package *and*
 activate it in one step.
+
+> **Trust boundary.** `/sidechat/api/*` is fenced exactly like DSH's own `/api`:
+> loopback, the listener's own bind address, or an authority declared through
+> `--trusted-host` is accepted, and cross-site markers or a mismatched `Origin`
+> are refused. The fence is not an identity check — DSH's `/api` additionally
+> requires the browser session cookie, while this plugin's routes serve the
+> already authenticated page without re-checking it. Keep the deployment on
+> loopback, or behind a reverse proxy that authenticates, before exposing it.
 
 > **Recommended: install from npm.** The package is published to
 > [npm](https://www.npmjs.com/package/dsh-side-chat-plus) as
