@@ -92,10 +92,15 @@ pnpm build          # 末尾依次跑 check-seed-exports 与 check-dsh-compat
 - 安装位置：`web` profile 以 `link:D:/code/DSH-side-chat` 链接；`desktop` profile 目前
   未安装本插件（装它走 `dsh plugin --profile desktop add …`；桌面应用必须**先完全退出**，
   CLI 才允许写 desktop profile）。
-- **npm 上的 `0.4.4` 及更早版本在 0.2.1-rc.1 上装不上**：它们的 peer／`engines.dsh` 是
-  `>=0.2.0-rc.1`，会被 0.2.1-rc.1 的安装校验拒装。`0.5.0` 起下限为 `>=0.2.1-rc.1`——
-  排查「装不上」时先 `npm view dsh-side-chat-plus@<版本> peerDependencies` 对一下，不要只看
-  本仓库的 `package.json`。
+- **npm 上 `0.4.3` 及更早的版本在 0.2.1-rc.1 上装不上**（它们仍是 caret 形式的 peer）。
+  `0.5.0` 是第一个声明 `>=0.2.1-rc.1` 的发布版，已发布且 `latest = 0.5.0`。排查「装不上」时先
+  `npm view dsh-side-chat-plus@<版本> peerDependencies` 对一下，不要只看本仓库的
+  `package.json`。
+- **验证发布结果别只看 packument**：`https://registry.npmjs.org/dsh-side-chat-plus` 的
+  `versions`／`dist-tags` 会滞后十几分钟，而 `<pkg>/<version>` 与
+  `<pkg>/-/<pkg>-<version>.tgz` 是实时的。曾因此把一次成功的 CI 发布误判成失败。
+- **本机直连 `registry.npmjs.org` 发布不可靠**（`ECONNRESET`／网络超时，连元数据 GET 都会被重置），
+  发布请走 tag → `publish.yml`；本地只用 `pnpm pack` 校验产物内容。
 
 ## 构建与产物
 
