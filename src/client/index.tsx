@@ -115,6 +115,12 @@ interface SidechatStore {
   /** Record whether the built-in right sidebar exists in this deployment. */
   setDockAvailable(available: boolean): void
   setActive(childId: string): void
+  /**
+   * Switch to a fresh, not-yet-created side chat and reveal the panel. The next
+   * message sent from the panel starts the session; nothing is created here, so
+   * an abandoned "new chat" leaves no ghost session behind.
+   */
+  beginNewChat(parentSessionId: string): void
   patch(partial: Partial<PanelState>): void
 }
 
@@ -172,6 +178,18 @@ function createStore(): SidechatStore {
     for (const fn of [...listeners]) fn()
   }
 
+  /** Adopt a session's remembered panel, discarding the previous session's. */
+  const switchTo = (next: string | undefined): void => {
+    if (current !== undefined) bySession.set(current, panel)
+    current = next
+    panel = next === undefined
+      ? emptyPanel()
+      : (bySession.get(next) ?? { ...emptyPanel(), parentSessionId: next, lookup: prefs.lookupDefault })
+    anchor = null
+    mainQuestion = null
+    dismissedQuestionIds = []
+  }
+
   return {
     getSnapshot: () => snapshot,
     subscribe: (fn) => {
@@ -180,14 +198,16 @@ function createStore(): SidechatStore {
     },
     setCurrent(next) {
       if (next === current) return
-      if (current !== undefined) bySession.set(current, panel)
-      current = next
-      panel = next === undefined
-        ? emptyPanel()
-        : (bySession.get(next) ?? { ...emptyPanel(), parentSessionId: next, lookup: prefs.lookupDefault })
-      anchor = null
-      mainQuestion = null
-      dismissedQuestionIds = []
+      switchTo(next)
+      notify()
+    },
+    beginNewChat(parentSessionId) {
+      if (parentSessionId !== current) switchTo(parentSessionId)
+      // Keep the draft and staged attachments: they belong to the panel, and
+      // carrying them over is what lets "ask this in a new chat" work. Only the
+      // active conversation and its transcript are reset.
+      panel = { ...panel, open: true, parentSessionId, activeChildId: null, messages: [], error: null }
+      dockLaunch?.()
       notify()
     },
     setAnchor(next) {
@@ -999,6 +1019,18 @@ function SidechatPanel(props: {
     if (panel.open && panel.activeChildId !== null) setCollapsed(false)
   }, [panel.open, panel.activeChildId])
 
+  // A panel that is open with no active chat is the new-chat composer: reveal
+  // it (a collapsed panel would hide the input) and put the caret there, so
+  // /side and ⌘⌥S land where the question goes.
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  useEffect(() => {
+    if (!panel.open || panel.activeChildId !== null) return
+    setCollapsed(false)
+    // The textarea only exists after the expand above re-renders the panel.
+    const frame = window.requestAnimationFrame(() => { textareaRef.current?.focus() })
+    return () => { window.cancelAnimationFrame(frame) }
+  }, [panel.open, panel.activeChildId])
+
   // Open (and expand) the panel to show the pending question dialog.
   const openQuestionPanel = useCallback(() => {
     props.store.openPanel(panel.parentSessionId)
@@ -1619,6 +1651,7 @@ function SidechatPanel(props: {
           </div>
         )}
         <textarea
+          ref={textareaRef}
           className={css.panelTextarea}
           placeholder={props.t('panel.input.placeholder')}
           value={panel.draft}
@@ -2097,6 +2130,56 @@ export function apply(ctx: Context): void {
     }
     return false
   }
+
+  /**
+   * Open the panel on a fresh, not-yet-created side chat. The store owns the
+   * transition so the panel's "no active chat" state is the single source of
+   * truth for the new-chat composer.
+   */
+  const openNewSidechat = (sessionId?: string): boolean => {
+    const parentSessionId = sessionId ?? currentSessionId()
+    if (parentSessionId === undefined) return false
+    store.beginNewChat(parentSessionId)
+    return true
+  }
+
+  // `/side` opens a new side chat (client-owned command: no model message, no
+  // host command lifecycle), mirroring the Codex-style entry point. The inject
+  // keeps the side chat itself usable on a shell that lacks the command surface.
+  ctx.inject(['commandUi'], (scope) => {
+    scope.effect(() => scope.commandUi.register({
+      name: 'side',
+      label: () => translate(activeLocale, 'command.newChat'),
+      description: () => translate(activeLocale, 'command.newChatDescription'),
+      icon: IconPanelLeftOutlineRegular,
+      ui: { kind: 'action', run: (session) => { openNewSidechat(session.sessionId) } },
+    }), 'dsh-side-chat: /side command')
+  })
+
+  // ⌘⌥S (Ctrl+Alt+S on Windows/Linux) opens a new side chat from anywhere.
+  const newChatBinding = { code: 'KeyS', modifiers: ['primary', 'alt'] as const }
+  ctx.inject(['shortcuts'], (scope) => {
+    scope.effect(() => scope.shortcuts.register({
+      id: 'dsh-side-chat.new',
+      label: () => translate(activeLocale, 'command.newChat'),
+      aliases: ['side chat', 'sidechat', 'new side chat'],
+      defaults: {
+        'desktop:macos': newChatBinding,
+        'desktop:windows': newChatBinding,
+        'desktop:linux': newChatBinding,
+        'web:macos': newChatBinding,
+        'web:windows': newChatBinding,
+      },
+      regions: ['page', 'editable', 'terminal'],
+      modals: [],
+      resolve: () => {
+        if (currentSessionId() === undefined) {
+          return { status: 'blocked', reason: translate(activeLocale, 'command.noSession') }
+        }
+        return { status: 'handled', run: () => { openNewSidechat() } }
+      },
+    }), 'dsh-side-chat: new side chat shortcut')
+  })
 
   ctx.effect(() => {
     const offZh = ctx.locale.register(LOCALE_NS, 'zh', zh)

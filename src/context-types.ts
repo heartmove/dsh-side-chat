@@ -449,6 +449,48 @@ export interface SideConversationService {
   }
 }
 
+/** The subset of a client Session the command/shortcut surfaces hand back. */
+export interface SideCommandSession {
+  sessionId: string
+}
+
+/** The client command registry face (`ctx.commandUi`). */
+export interface SideCommandUiService {
+  register(contribution: {
+    name: string
+    label: () => string
+    description?: () => string
+    icon?: unknown
+    available?: (session: SideCommandSession) => boolean
+    ui: { kind: 'action'; run: (session: SideCommandSession) => void }
+  }): () => void
+}
+
+/** One physical key binding accepted by the keyboard service. */
+export interface SideShortcutBinding {
+  code: string
+  modifiers: ReadonlyArray<'primary' | 'control' | 'alt' | 'shift' | 'meta'>
+}
+
+/** One feature-owned keyboard command (`ctx.shortcuts`). */
+export interface SideShortcutCommand {
+  id: string
+  label: () => string
+  aliases?: readonly string[]
+  defaults: Readonly<Record<string, SideShortcutBinding | undefined>>
+  regions?: readonly string[]
+  modals?: readonly string[]
+  resolve: (context: unknown) =>
+    | { status: 'handled'; run: () => void }
+    | { status: 'blocked'; reason: string }
+    | { status: 'pass' }
+}
+
+/** The keyboard service face (`ctx.shortcuts`). */
+export interface SideShortcutsService {
+  register(command: SideShortcutCommand): () => void
+}
+
 declare module 'cordis' {
   interface Context {
     webServer: SideWebServer
@@ -466,6 +508,8 @@ declare module 'cordis' {
     commands: SideCommandsService
     conversation: SideConversationService
     uiSession: SideUiSessionService
+    commandUi: SideCommandUiService
+    shortcuts: SideShortcutsService
     inject(deps: string[], callback: (ctx: Context) => void): void
     get(name: string): unknown | undefined
     on(name: string, listener: (...args: any[]) => any): () => void
