@@ -23,6 +23,11 @@ through first, then bring the answer back and answer the dialog.
 - **Select text → ask in a side chat.** Select any part of a message and a
   floating button *"Ask in side chat"* appears. The selected text is carried
   into the side chat automatically.
+- **`/side` or ⌘⌥S for a fresh side chat.** `/side` and
+  `Cmd+Option+S` (Ctrl+Alt+S on Windows/Linux) open a new side chat for the
+  current conversation without selecting text. The shortcut is an ordinary DSH
+  application command and can be rebound, cleared, or restored under
+  **Settings → Edit shortcuts**.
 - **Per-conversation isolation.** Each side chat is a hidden ordinary DSH
   session (`meta.parentSession` links it to the conversation that started it,
   and the session is archived so it stays out of the main session list).
@@ -259,6 +264,19 @@ in the profile directory and restart `dsh web`.
 5. Send. The reply streams back with markdown rendering and, where applicable,
    a "Think" row for the model's reasoning.
 6. Drag the panel's left edge to resize, or use the collapse/expand control.
+
+### Open a new side chat without a selection
+
+`/side` and `Cmd+Option+S` (Ctrl+Alt+S on Windows/Linux) open a **new** side
+chat for the current conversation from anywhere — no text selection needed.
+The panel expands with the composer focused; the first message sent there
+starts a new hidden side chat, so an abandoned draft creates nothing. The
+command is client-owned: it writes no model message and no session log entry.
+
+The shortcut is a normal DSH application command, listed as **New side chat**
+under **Settings → Edit shortcuts** (or `Mod+/`), and can be rebound, removed,
+or restored there. `/side` itself takes no arguments; to ask about specific
+text, select it and use **Ask in side chat** instead.
 
 ### Sending behavior
 
