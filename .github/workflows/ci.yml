@@ -31,8 +31,9 @@ jobs:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
 
-      # The lockfile and exact dev dependencies target DSH 0.2.1-rc.1; the
-      # declared support window is the open range >=0.2.1-rc.1.
+      # The lockfile and exact dev dependencies target DSH 0.2.2-alpha.3; the
+      # declared support window is the open range >=0.2.1-rc.1 (the floor line is
+      # re-verified against 0.2.1-rc.1 for every version-line move).
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
@@ -56,3 +57,29 @@ jobs:
             dsh-side-chat-plus-*.tgz
             lib/
           if-no-files-found: ignore
+
+  # The declared peer window is the open range >=0.2.1-rc.1, so the FLOOR line must
+  # keep working even though devDependencies track the newest line.
+  # scripts/verify-dsh-lines.mjs swaps the manifest, runs typecheck/test/build, and
+  # restores it; --keep skips the restore because this job discards the checkout.
+  floor:
+    name: Floor line (declared minimum DSH)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.21.0
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Verify the floor line
+        run: pnpm verify:lines --lines 0.2.1-rc.1 --keep

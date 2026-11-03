@@ -183,6 +183,21 @@ export interface SideAgentOptions {
   maxTokens?: number
 }
 
+/**
+ * Durable model choice for future steps (DSH 0.2.2-alpha.3+).
+ *
+ * The 0.2.1 line applied a plugin's live selection by rewriting request config
+ * from a scoped listener; 0.2.2 replaced that with a logged `model/selection`
+ * event the step preparation fixes before prompt assembly, and the loop now
+ * rejects an `agent/request` listener that proposes a different route.
+ */
+export interface SideAgentModel {
+  /** Replace the next step's complete selection (equal selections are a no-op). */
+  select(selection: SideModelSelection): void
+  /** Resolve the choice for the next step, or undefined when no source names a route. */
+  current?(): Readonly<SideModelSelection> | undefined
+}
+
 /** The live agent face (`ctx.agents.get(id)` / `AgentHandle.agent`). */
 export interface SideAgent {
   readonly id: string
@@ -190,6 +205,8 @@ export interface SideAgent {
   readonly session: SideSession
   readonly status: string
   readonly ctx: Context
+  /** Durable model choice; present from DSH 0.2.2-alpha.3, absent on the 0.2.1 line. */
+  readonly model?: SideAgentModel
   followup(message: unknown): void
   inject(message: unknown): void
   cancel(cause: { kind: 'user' | 'parent' | 'disposed' } | { kind: 'hook'; reason: string }): void
@@ -237,12 +254,19 @@ export interface SideModelSelectionRef {
 }
 
 /**
- * Couple a mutable selection to an agent's prompt assembly and request routing
- * (`installModelSelection` on the agent package). Typed structurally rather
- * than imported: this plugin resolves outside the DSH monorepo's single cordis
- * instance, so the upstream export is reached through a loose signature.
+ * The 0.2.1-line coupler: a mutable selection ref applied to prompt assembly
+ * (`system-prompt/assemble`), request routing (`agent/request`), and the
+ * model-switch notice. Typed structurally rather than imported: this plugin
+ * resolves outside the DSH monorepo's single cordis instance.
  */
 export type SideInstallModelSelection = (agentCtx: Context, selection: SideModelSelectionRef) => () => void
+
+/**
+ * The 0.2.2-alpha.3-line installer: the live selection moved to
+ * {@link SideAgentModel.select}, so the installer only adds the model-switch
+ * notice to the prompt and takes no selection argument.
+ */
+export type SideInstallModelSwitchNotice = (agentCtx: Context) => () => void
 
 /**
  * The workspace registry face. `archiveSession` hides a session from every

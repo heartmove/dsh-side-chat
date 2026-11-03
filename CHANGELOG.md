@@ -1,3 +1,54 @@
+# 0.5.1
+
+对照 DSH **0.2.2-alpha.3** 的 release notes 与真实运行时做的一轮兼容性修复。
+
+- **修复「侧边聊天切换模型/思考难度在 0.2.2-alpha.3 上静默失效」**：该版本把模型选择
+  从「插件持有的可变 ref + `installModelSelection(agentCtx, selection)`」改成
+  **持久选择**——`agent.model.select()` 追加 `model/selection` 事件，步骤准备在提示词
+  组装前固定路由；同名安装器现在只接收 `agentCtx` 并负责「模型已切换」提示行。旧调用
+  仍能通过编译（第二个参数被忽略），但选择再也不会生效，且 agent-loop 会对
+  `agent/request` 里改写 provider/model 的监听器直接抛错。现在按能力探测：出现
+  `AgentModel` 的运行时用持久 API（创建时记录继承路由、`sidechat.selectModel` 后追加
+  新选择），0.2.1 线仍走原耦合器。
+- **继承发起会话的「下一步」模型**：`sidechat.inherit` / `sidechat.start` /
+  `sidechat.summarize` 先读 `agent.model.current()`，再退回
+  `session.requestHeader()` 与 agent options。0.2.2-alpha.3 起，主会话里刚切换的模型要
+  等到下一次请求才进 request header，旧顺序会让紧接着新建的侧边聊天继承到旧模型。
+- **开发依赖与锁文件升到 0.2.2-alpha.3**：19 个 `@deepseek-ai/dsh-*` devDependency、
+  `cordis`（`4.0.6-alpha.2`）与 `schemastery`（`3.18.6-alpha.2`）对齐该运行时；
+  `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude` 为每个 dsh 包追加
+  `0.2.2-alpha.3`（保留旧版本条目，便于随时回切复验）。
+- **floor 不变，仍为 `0.2.1-rc.1`**：0.2.2-alpha.3 的变更是可探测的加法式改造，代码在
+  两条线上都能正确工作，因此不抬下限。按 AGENTS.md 的 floor 复验流程实测：切回
+  `0.2.1-rc.1`（含 `cordis@4.0.3`／`schemastery@3.18.3`）后
+  `pnpm typecheck` / `pnpm test`（24 通过、1 条 0.2.2 专属用例按能力跳过）/
+  `pnpm build` 全绿，再切回 0.2.2-alpha.3 复归。
+- **新增回归测试**：`scripts/compat.test.ts` 增加「0.2.2+ 通过 `agent.model.select` 记录
+  选择、且不安装 `agent/request` 改写器」与「优先继承持久选择」两条；
+  `scripts/model-selection-legacy.test.ts` 用 mock 的 0.2.1 形态 agent 包验证下限线仍
+  收到二的参数耦合器。测试同时把 `DSH_HOME` 指到临时目录，跑测试不再重写真实的
+  侧边聊天记录表。
+- **验证**：`pnpm typecheck`、25 条测试、`pnpm build`（含对 0.2.2-alpha.3 真实 web shell
+  的 `check-seed-exports` 与 `check-dsh-compat`）全绿；在 0.2.2-alpha.3 运行时上
+  `evaluatePluginCompatibility` 返回 `undefined`（兼容），`readPluginMeta` 仍返回中英
+  标题/描述与内联图标。
+- **向前兼容落到工程手段**：peer 保持单一开区间、不设上界（已用真实 `dsh-app-boot` 实测
+  0.2.2-rc.1 / 0.2.2 / 0.2.3-rc.1 / 0.3.0 / 1.0.0 / 2.0.0 全部 ACCEPT），运行期一律**能力探测**
+  而不是比较版本号；客户端平台模块用构建期 `check-seed-exports` 与运行期
+  `SidechatErrorBoundary`（面板与右侧栏各自兜底）双层保护，运行时比构建线新时降级显示
+  提示而不是白屏。
+- **新增 `pnpm verify:lines`**（`scripts/verify-dsh-lines.mjs`）：对当前开发线与 peer 下限线
+  各切换清单跑一遍 install/typecheck/test/build，按各线自己的 manifest 对齐
+  `cordis`/`schemastery`，完成后自动复原；`--dry-run` / `--lines` / `--runtime` /
+  `--keep` 可选。CI 增加 `floor` job，每次 push 都验下限线。
+- 验证：`pnpm verify:lines --runtime <DSH 安装根>` 两条线均 PASS；`pnpm typecheck`、25 条测试、
+  `pnpm build` 全绿。
+- **未改动但需留意**：0.2.2-alpha.3 新增原生文本交互面
+  （`uiConversation.interactions` + `conversation.chat.text-interaction` 插槽，
+  可选插件 `dsh-message-quotes` 用它做「引用」）。本插件的浮动「问侧边聊天」菜单
+  仍走自己的 `selectionchange` 监听、不注册该面；同时装两者时选中文本会出现两个入口，
+  属交互重叠而非故障。
+
 # 0.5.0
 
 对照 DSH **0.2.1-rc.1** 的 release notes 做的一轮兼容性修复。该版本改写了 `/api` 的

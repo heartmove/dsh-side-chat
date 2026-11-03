@@ -1,6 +1,6 @@
 # dsh-side-chat — 侧边聊天 (Side chat)
 
-Targets DSH **0.2.1-rc.1 and newer** (verified against **0.2.1-rc.1**). See [compatibility changes](CHANGELOG.md).
+Targets DSH **0.2.1-rc.1 and newer** (verified against **0.2.2-alpha.3** and the floor **0.2.1-rc.1**). See [compatibility changes](CHANGELOG.md).
 
 An **enhanced version of a Codex-style side chat** for
 [DSH](https://www.deepseek.com): a dedicated, agentic chat in a right-side
@@ -121,6 +121,19 @@ and you never have to answer before you're ready.
   `@deepseek-ai/dsh*` peer must be a single open lower bound `>=<floor>`, all
   peers must share one floor, that floor must match `dsh.plugin.json`'s
   `engines.dsh`, and it must not be newer than the DSH runtime under test.
+- `pnpm verify:lines` (`scripts/verify-dsh-lines.mjs`) runs the whole suite against
+  **both** the pinned development line and the declared peer floor — swapping the
+  manifest, aligning `cordis`/`schemastery` to each line's own manifest, then
+  restoring everything. CI runs the floor line on every push.
+
+**Forward compatibility is the design rule behind that window.** The peers carry
+no upper bound, so any later DSH (0.2.2-rc.1, 0.2.3, 0.3.0, …) installs without a
+manifest change; the host half then probes runtime capabilities (`AgentModel` →
+durable model selection, otherwise the 0.2.1 coupler) instead of comparing version
+numbers, and the client half is guarded by `check-seed-exports` at build time
+plus a render boundary at runtime. Forward compatibility is not a claim about
+unknown future behavior: install-time acceptance is guaranteed by the open range,
+and run-time behavior is re-verified against each new line with `pnpm verify:lines`.
 
 ## Build
 
@@ -149,7 +162,7 @@ The package name is `dsh-side-chat-plus` (the plain `dsh-side-chat` name on npm
 belongs to a different maintainer, so the release is published under the
 `-plus` name).
 
-> **Registry dependencies.** Local and CI builds use exact DSH `0.2.1-rc.1` development dependencies and the checked-in lockfile. No local harness checkout or CI-only overrides are required.
+> **Registry dependencies.** Local and CI builds use exact DSH `0.2.2-alpha.3` development dependencies and the checked-in lockfile. No local harness checkout or CI-only overrides are required.
 
 ## Deploy
 

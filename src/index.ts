@@ -29,6 +29,8 @@ import type {
   SideAgentHandle,
   SideImageAttachmentRef,
   SideInstallModelSelection,
+  SideInstallModelSwitchNotice,
+  SideModelSelection,
   SideModelSelectionRef,
   SidePresetOption,
   SideSession,
@@ -56,12 +58,58 @@ export const inject = [
 ]
 
 /**
- * Couple a side chat's selection to its agent so prompt assembly and request
- * routing switch together. Read through the namespace object rather than a
- * named import: a named import fails the ESM link on any build that drops the
- * export, while this degrades to the request-only waterfall in `start`.
+ * Read one export of the agent package without tripping the ESM namespace.
+ * A missing export is undefined here (older DSH lines), and a test double that
+ * models a partial namespace throws on the unknown key instead.
  */
-const installModelSelection = (agentApi as unknown as { installModelSelection?: SideInstallModelSelection }).installModelSelection
+function readAgentExport(name: string): unknown {
+  try {
+    return (agentApi as unknown as Record<string, unknown>)[name]
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Apply a side chat's model / reasoning-effort choice. Two runtime shapes exist:
+ *
+ * - DSH 0.2.1 and earlier: `installModelSelection(agentCtx, selection)` couples a
+ *   MUTABLE ref to `system-prompt/assemble`, `agent/request`, and the model-switch
+ *   notice, so a mid-conversation switch lands on a later step.
+ * - DSH 0.2.2-alpha.3+: the choice became durable (`agent.model.select()` appends a
+ *   `model/selection` event the step preparation fixes before assembly), the same
+ *   installer now adds only the notice and takes no selection, and the agent loop
+ *   throws when an `agent/request` listener proposes a route different from the
+ *   step's fixed selection. `AgentModel` is the new-API marker: the 0.2.1 line
+ *   exports no such symbol.
+ *
+ * Read through the namespace object rather than a named import: a named import
+ * fails the ESM link on any build that drops the export, while this degrades to
+ * the request-only waterfall in `start`.
+ */
+const installModelSelection = readAgentExport('installModelSelection') as
+  | SideInstallModelSelection
+  | SideInstallModelSwitchNotice
+  | undefined
+
+/** Whether this runtime records model choices durably on the agent (0.2.2+). */
+const durableModelSelection = typeof readAgentExport('AgentModel') === 'function'
+
+/**
+ * Record one selection for the agent's NEXT step on a 0.2.2+ runtime. The
+ * durable append is what prompt assembly and routing read afterwards, so a
+ * switch made between turns (or mid-turn, before the next step prepares)
+ * applies without touching request config. A no-op on the coupled 0.2.1 line,
+ * which reads the mutable ref instead.
+ */
+const recordSelection = (agent: SideAgent, selection: SideModelSelection | undefined): void => {
+  if (!durableModelSelection || selection === undefined) return
+  try {
+    agent.model?.select(selection)
+  } catch (error) {
+    console.warn('[dsh-side-chat] model selection record failed:', error instanceof Error ? error.message : String(error))
+  }
+}
 
 /** One live side chat the host owns. */
 interface SidechatRecord {
@@ -295,16 +343,31 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
     return parent
   }
 
+  /**
+   * The launching conversation's NEXT-STEP model choice.
+   *
+   * DSH 0.2.2-alpha.3 keeps a durable selection on the agent (`agent.model`), and a
+   * model switch recorded in the main conversation applies from the next step,
+   * while `session.requestHeader()` still reports the previous request. Reading
+   * the durable choice first is what makes a side chat launched right after a
+   * switch inherit the newly selected model; older runtimes expose no `model`
+   * and fall back to the request header, then to the agent's own options.
+   */
+  const parentRoute = (parent: SideAgent): { provider: string; model: string; reasoningEffort?: string } => {
+    const selected = parent.model?.current?.()
+    const config = parent.session.requestHeader?.()?.config
+    const effort = selected?.reasoningEffort ?? config?.reasoningEffort
+    return {
+      provider: selected?.provider ?? config?.provider ?? parent.options.provider ?? '',
+      model: selected?.model ?? config?.model ?? parent.options.model ?? '',
+      ...(effort === undefined ? {} : { reasoningEffort: effort }),
+    }
+  }
+
   /** The parent conversation's current model selection (for staged-mode display). */
   const inherit = (payload: unknown): { provider: string; model: string; reasoningEffort?: string } => {
     const parentSessionId = requireString(payload, 'parentSessionId')
-    const parent = parentOf(parentSessionId)
-    const parentConfig = parent.session.requestHeader?.()?.config
-    return {
-      provider: parentConfig?.provider ?? parent.options.provider ?? '',
-      model: parentConfig?.model ?? parent.options.model ?? '',
-      ...(parentConfig?.reasoningEffort === undefined ? {} : { reasoningEffort: parentConfig.reasoningEffort }),
-    }
+    return parentRoute(parentOf(parentSessionId))
   }
 
   /** Resolve the live side-chat agent behind a childId. */
@@ -458,16 +521,15 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
     const blocks = await durableContent(content, lookupEnabled)
 
     const record = payload as { provider?: unknown; model?: unknown; reasoningEffort?: unknown; preset?: unknown }
+    const inherited = parentRoute(parent)
     const parentConfig = parent.session.requestHeader?.()?.config
-    const parentProvider = parentConfig?.provider ?? parent.options.provider ?? ''
-    const parentModel = parentConfig?.model ?? parent.options.model ?? ''
     // A client-supplied selection wins over the inherited one (lets the user
     // pick a provider/model before the first send while "send immediately" is off).
-    const provider = typeof record.provider === 'string' && record.provider !== '' ? record.provider : parentProvider
-    const model = typeof record.model === 'string' && record.model !== '' ? record.model : parentModel
+    const provider = typeof record.provider === 'string' && record.provider !== '' ? record.provider : inherited.provider
+    const model = typeof record.model === 'string' && record.model !== '' ? record.model : inherited.model
     const maxTokens = parentConfig?.maxTokens ?? parent.options.maxTokens
     const explicitEffort = typeof record.reasoningEffort === 'string' && record.reasoningEffort !== '' ? record.reasoningEffort : undefined
-    const reasoningEffort = explicitEffort ?? parentConfig?.reasoningEffort
+    const reasoningEffort = explicitEffort ?? inherited.reasoningEffort
     const cwd = parent.session.header.cwd
 
     // The mutable ref the agent reads live, so `sidechat.selectModel` takes
@@ -499,14 +561,22 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
         if (parentCtx !== undefined) {
           ctx.agentPresets.composeFrom(agentCtx, parentCtx)
         }
-        // Model / reasoning-effort are adjustable at runtime. The coupled
-        // installer snapshots the selection before prompt assembly delegates
-        // and applies the same value to the request config, so a switch made
-        // mid-turn lands on a later step instead of assembling the prompt for
-        // the inherited model while calling the selected one. An absent
-        // effort clears the inherited one, restoring provider/default behavior.
+        // Model / reasoning-effort are adjustable at runtime.
+        //
+        // 0.2.2+: the choice is durable on the agent (recorded after creation),
+        // and the installer only adds the model-switch notice; a request-config
+        // rewrite would now throw against the step's fixed selection.
+        if (durableModelSelection) {
+          ;(installModelSelection as SideInstallModelSwitchNotice | undefined)?.(agentCtx)
+          return
+        }
+        // 0.2.1: the coupled installer snapshots the selection before prompt
+        // assembly delegates and applies the same value to the request config,
+        // so a switch made mid-turn lands on a later step instead of assembling
+        // the prompt for the inherited model while calling the selected one. An
+        // absent effort clears the inherited one, restoring default behavior.
         if (installModelSelection !== undefined) {
-          installModelSelection(agentCtx, selection)
+          ;(installModelSelection as SideInstallModelSelection)(agentCtx, selection)
           return
         }
         // Fallback for builds without that API: rewrites the request config
@@ -525,6 +595,10 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
         })
       },
     })
+
+    // Record the inherited/selected route before the first step prepares, so
+    // 0.2.2+ runs the side chat on it instead of the options-only fallback.
+    recordSelection(handle.agent, selection.current)
 
     try {
       // Client-supplied preset wins; otherwise inherit the launching
@@ -670,6 +744,9 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
       model,
       ...(typeof reasoningEffort === 'string' && reasoningEffort !== '' ? { reasoningEffort } : {}),
     }
+    // 0.2.2+: log the durable choice for the next step. The 0.2.1 line reads
+    // the mutable ref through its coupled listeners instead.
+    recordSelection(record.handle.agent, record.selection.current)
     return { accepted: true }
   }
 
@@ -705,14 +782,13 @@ function buildApi(ctx: Context, sideChats: Map<string, SidechatRecord>, getSetti
     const record = payload as { provider?: unknown; model?: unknown; reasoningEffort?: unknown; locale?: unknown }
 
     // Inherit the launching conversation's model unless the client supplied one.
-    const parent = parentOf(parentSessionId)
-    const parentConfig = parent.session.requestHeader?.()?.config
-    const provider = typeof record.provider === 'string' && record.provider !== '' ? record.provider : (parentConfig?.provider ?? parent.options.provider ?? '')
-    const model = typeof record.model === 'string' && record.model !== '' ? record.model : (parentConfig?.model ?? parent.options.model ?? '')
+    const inherited = parentRoute(parentOf(parentSessionId))
+    const provider = typeof record.provider === 'string' && record.provider !== '' ? record.provider : inherited.provider
+    const model = typeof record.model === 'string' && record.model !== '' ? record.model : inherited.model
     if (provider === '' || model === '') {
       throw new SidechatError('bad-request', 'no model available for summarization')
     }
-    const reasoningEffort = typeof record.reasoningEffort === 'string' && record.reasoningEffort !== '' ? record.reasoningEffort : parentConfig?.reasoningEffort
+    const reasoningEffort = typeof record.reasoningEffort === 'string' && record.reasoningEffort !== '' ? record.reasoningEffort : inherited.reasoningEffort
 
     const locale = typeof record.locale === 'string' && record.locale === 'en' ? 'en' : 'zh'
     const prompt = locale === 'en'

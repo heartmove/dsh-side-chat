@@ -1049,3 +1049,24 @@
   outline-offset: -1px;
 }
 
+.renderFailure {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px;
+  padding: 12px 14px;
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-2);
+  border: 1px solid var(--dsw-alias-state-error-primary);
+  border-radius: 12px;
+  font-family: var(--dsw-font-family);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.renderFailure code {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

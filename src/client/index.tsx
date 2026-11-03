@@ -28,6 +28,7 @@ import {
   ImageLightbox,
   type ImageLoader,
 } from './attachments/index.ts'
+import { SidechatErrorBoundary } from './ErrorBoundary.tsx'
 import type { Context, SidePendingInteraction, SideQuestionItem, SideQuestionOption, SideSidebarRight, SideSidebarRightTabs } from '../context-types.ts'
 import {
   api,
@@ -1711,6 +1712,19 @@ function EmbeddedSidechatPanel(props: {
 }
 
 /** The portalled shell: floating menus + the panel, switching on prefs.panelHome. */
+/**
+ * The dock surface, guarded independently: it renders inside the host's
+ * right-sidebar tab, so a drifted platform module must not take that sidebar
+ * down with it.
+ */
+function DockPanel(props: Parameters<typeof EmbeddedSidechatPanel>[0]) {
+  return (
+    <SidechatErrorBoundary label="dock">
+      <EmbeddedSidechatPanel {...props} />
+    </SidechatErrorBoundary>
+  )
+}
+
 function SideChatShell(props: {
   store: SidechatStore
   t: (key: SidechatLocaleKey) => string
@@ -2233,7 +2247,7 @@ export function apply(ctx: Context): void {
             askSidechat,
             askSidechatNew,
           }),
-        }, EmbeddedSidechatPanel))
+        }, DockPanel))
         const launch = (): void => {
           try {
             sidebarRight.openTab(SIDEBAR_TAB_KIND, { revealIfOpened: true })
@@ -2288,15 +2302,19 @@ export function apply(ctx: Context): void {
     const root = createRoot(host)
 
     const t = (key: SidechatLocaleKey): string => translate(activeLocale, key)
-    root.render(<SideChatShell
-      store={store}
-      t={t}
-      formatDuration={formatDuration}
-      bringToMain={bringToMain}
-      summarizeBring={summarizeBring}
-      askSidechat={askSidechat}
-      askSidechatNew={askSidechatNew}
-    />)
+    root.render(
+      <SidechatErrorBoundary label="panel">
+        <SideChatShell
+          store={store}
+          t={t}
+          formatDuration={formatDuration}
+          bringToMain={bringToMain}
+          summarizeBring={summarizeBring}
+          askSidechat={askSidechat}
+          askSidechatNew={askSidechatNew}
+        />
+      </SidechatErrorBoundary>,
+    )
 
     return () => {
       root.unmount()

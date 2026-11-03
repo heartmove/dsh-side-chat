@@ -35,8 +35,9 @@ jobs:
           registry-url: https://registry.npmjs.org
           cache: pnpm
 
-      # The lockfile and exact dev dependencies target DSH 0.2.1-rc.1; the
-      # declared support window is the open range >=0.2.1-rc.1.
+      # The lockfile and exact dev dependencies target DSH 0.2.2-alpha.3; the
+      # declared support window is the open range >=0.2.1-rc.1 (the floor line is
+      # re-verified against 0.2.1-rc.1 for every version-line move).
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

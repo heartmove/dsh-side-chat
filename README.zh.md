@@ -1,6 +1,6 @@
 # dsh-side-chat — 侧边聊天（Side chat）
 
-当前适配 DSH **0.2.1-rc.1 及之后的版本**（已在 **0.2.1-rc.1** 上验证），详见[兼容性变更](CHANGELOG.md)。
+当前适配 DSH **0.2.1-rc.1 及之后的版本**（已在 **0.2.2-alpha.3** 与下限 **0.2.1-rc.1** 上验证），详见[兼容性变更](CHANGELOG.md)。
 
 一个 [DSH](https://www.deepseek.com) 网页插件，**Codex 式侧边聊天的强化版本**：
 在右侧面板提供按主会话隔离的独立聊天，具备 Codex 式的智能体能力——继承主会话的
@@ -82,6 +82,16 @@ Codex 式能力之上，额外支持针对当前**问题弹框**的侧边聊天�
 - 之后还会跑 `check-dsh-compat`（也可单独执行 `pnpm check:dsh`）：要求每个
   `@deepseek-ai/dsh*` peer 都是单一开区间 `>=<floor>`、所有 peer 共用同一个 floor、
   且与 `dsh.plugin.json` 的 `engines.dsh` 一致，并校验 floor 不高于被测的 DSH 运行时。
+- `pnpm verify:lines`（`scripts/verify-dsh-lines.mjs`）对**当前开发线**与**声明的 peer 下限线**
+  各跑一遍完整套件：切换清单、把 `cordis`/`schemastery` 对齐到该线自己的 manifest，
+  跑完自动复原。CI 每次 push 都会跑下限线。
+
+**向前兼容就是这个开区间背后的设计规则。** peer 不设上界，所以任何更新的 DSH
+（0.2.2-rc.1、0.2.3、0.3.0……）都不需要改清单就能装；host 端随后做**能力探测**
+（有 `AgentModel` 走持久模型选择，没有就走 0.2.1 的耦合器），而不是比较版本号；
+client 端由构建期的 `check-seed-exports` 与运行期的渲染兜底保护。向前兼容不是对未来
+行为的空头承诺：安装期放行由开区间保证，运行期行为则用 `pnpm verify:lines` 对每条新线
+重新实测。
 
 ## 构建
 
@@ -106,7 +116,7 @@ pnpm build
 
 包名为 `dsh-side-chat-plus`（npm 上的裸名 `dsh-side-chat` 属于另一维护者，因此发布以 `-plus` 命名）。
 
-> **registry 依赖说明。** 本地和 CI 使用精确的 DSH `0.2.1-rc.1` 开发依赖和同一份锁文件，无需本地 harness checkout 或 CI 专用 overrides。
+> **registry 依赖说明。** 本地和 CI 使用精确的 DSH `0.2.2-alpha.3` 开发依赖和同一份锁文件，无需本地 harness checkout 或 CI 专用 overrides。
 
 ## 部署
 

@@ -40,17 +40,44 @@
    DSH 0.2.1-rc.1 改写了本插件镜像的 `/api` 信任栅栏（接受监听绑定 IP 字面量、按监听协议
    归一化默认端口、`trustedHosts` 改由 `webStartup` 提供），迫使本插件改代码并重新发布。
    `0.1.7` 及更早、以及 `0.2.0-rc.1`／`0.2.0-rc.2` 都不再承诺支持，不要因为「代码看起来
-   还能跑」就把 floor 降回去。
+   还能跑」就把 floor 降回去。**0.2.2-alpha.3 没有抬 floor**：它把模型选择改成持久的
+   `agent.model.select()`（`installModelSelection` 只剩一个参数、只负责切换提示），
+   属于可做能力探测的加法式改造，两条线都能正确工作，因此只改代码、不抬下限。
 4. `devDependencies` 与 `pnpm-lock.yaml` 固定在**当前最新**的 DSH 版本线（写作时
-   `0.2.1-rc.1`），typecheck、测试、构建都对着它跑；floor 只体现在 peer 声明与跨版本验证里。
-   当前 floor 与最新版本线同为 `0.2.1-rc.1`，所以这一版没有更低的线可复验；下次升版本线时
-   floor 会重新低于 devDependency，那时再按下面的「floor 复验」跑两条线。
+   `0.2.2-alpha.3`，`cordis` 对齐运行时 `4.0.6-alpha.2`、`schemastery`
+   `3.18.6-alpha.2`），typecheck、测试、构建都对着它跑；floor 只体现在 peer 声明与跨版本
+   验证里。现在 floor（`0.2.1-rc.1`）低于版本线，**每次升版本线都要按下面的「floor 复验」
+   跑两条线**（0.5.1 已按此跑过，见「当前状态」）。
 5. 升 DSH 版本线时，把新版本逐个加进 `pnpm-workspace.yaml` 的
    `minimumReleaseAgeExclude`。pnpm 11 默认 `minimumReleaseAge=1440`（1 天），刚发布的
    DSH 版本不在白名单里会报 `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`。**保留旧版本的
    条目**，这样可以随时把 devDependencies 切回 floor 做复验。
 6. 新增/删除任何 `@deepseek-ai/dsh-*` 依赖时，`peerDependencies` 与 `devDependencies`
    一起改，并同步 `dsh.plugin.json`。
+
+### 向前兼容（对新版本不设墙）
+
+「兼容」有两层，必须分开看：
+
+1. **安装期**：由 semver 判定。peer 全是单一开区间 `>=<floor>`、没有任何上界，所以
+   0.2.2-rc.1 / 0.2.2 / 0.2.3 / 0.3.0 / 1.0 / 2.0 一律被
+   `evaluatePluginCompatibility` 放行（已用真实 `dsh-app-boot` 逐个实测 ACCEPT）。
+   **不要**为了让新版本装上而改 peer——它本来就装得上。
+2. **运行期**：semver 看不见，靠代码形态。硬规矩：
+   - **不做版本号比较**（不写 `if (runtime >= 0.2.2)`）。一律**能力探测**：导出/成员/方法
+     在不在、签名对不对（如 `AgentModel` 是否存在 → 持久选择 vs 可变 ref 耦合器），
+     探测失败就退回旧路径或安全降级。
+   - **跨插件能力走 cordis service，用可选访问**（`ctx.get('x')`、`?.()`），不要值导入
+     别的插件包，也不要假设新服务一定存在。
+   - **客户端平台模块**（冻结模块表）只外置 `react` / `react-dom` / `cordis` /
+     `dsh-client-ui-slots` / `dsh-client-ui-primitives`；`check-seed-exports` 在构建期
+     拿最新安装的真实 shell 校验导出，运行期再用 `SidechatErrorBoundary` 兜底——运行时
+     比构建线新时宁可局部显示失败提示，也不要整个面板/右侧栏白屏。
+   - **新版本发布后尽快跟一条 0.5.x**：向前兼容不等于行为兼容，DSH 改语义（0.2.2 的
+     `installModelSelection` 就是）只能靠跟进发现。
+
+> 经验：安装期通过 ≠ 行为兼容。0.2.2-alpha.3 的模型选择变更在 semver 与 TypeScript 上
+> 都"通过"，但选择会静默失效，还埋着 `agent/request` 抛错——所以两条线必须实跑。
 
 ### 兼容性验证（每次改版本或改依赖都要跑）
 
@@ -77,18 +104,49 @@ pnpm build          # 末尾依次跑 check-seed-exports 与 check-dsh-compat
   `readPluginMeta('dsh-side-chat-plus', <profile 目录的 file URL>)` 应返回中英 `title`／
   `description` 与内联的 `icon`（`<包>/icon`、`<包>/locale/<lang>.json` 都靠
   `package.json` 的 `exports` 解析，改 `exports` 后一定要复跑这一步）。
-- **floor 复验**：把 `devDependencies` 全部临时切回 floor 版本 →
+- **两条线一起验**：`pnpm verify:lines`（`scripts/verify-dsh-lines.mjs`）。
+  对「当前 devDependency 线」和「peer floor 线」各做一遍
+  `pnpm install → typecheck → test → build`，最后**自动复原** `package.json` 并重装原线
+  （即使某条线失败也会复原）。切换时按 `https://registry.npmjs.org/@deepseek-ai%2Fdsh/<版本>`
+  的 manifest 把 `cordis` / `schemastery` 一起对齐到该线自己声明的范围，所以不用手工查配对。
+
+  ```bash
+  pnpm verify:lines:dry                       # 只打印计划（含解析出的 cordis/schemastery 范围）
+  pnpm verify:lines --runtime <DSH 安装根目录>  # 两条线全跑；--runtime 让 check-seed-exports 用真实 web shell
+  pnpm verify:lines --lines 0.2.2-rc.1         # 只验某一条线
+  pnpm verify:lines --continue                 # 一条失败也继续跑下一条（默认遇错即停）
+  ```
+
+  默认走 `registry.npmjs.org`：预发布版本比 pnpm 的 `minimumReleaseAge` 新，且
+  `npmmirror` 的元数据可能还没同步。CI 里的 `floor` job 用
+  `--lines 0.2.1-rc.1 --keep` 跑下限线，`--keep` 省掉末尾的复原安装。
+- **floor 复验（手工兜底）**：把 `devDependencies` 全部临时切回 floor 版本 →
   `pnpm install && pnpm typecheck && pnpm test && pnpm build` → 再切回最新版本线并
   `pnpm install`。floor 低于 devDependency 时两条线都要绿。
 
+### 新 DSH 版本发布后的动作（以 0.2.2-rc.1 为例）
+
+1. `devDependencies` 的 19 个 `@deepseek-ai/dsh-*` 切到新版本，`cordis`/`schemastery`
+   按新线 manifest 对齐（`pnpm verify:lines:dry` 会打印该线声明什么）。
+2. 把新版本加进 `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude`（**保留旧条目**）。
+3. `pnpm install --registry https://registry.npmjs.org/` → `pnpm verify:lines`
+   （新线 + floor 线都要绿）。
+4. 用真实运行时跑 `evaluatePluginCompatibility` / `readPluginMeta`，并核对
+   `scripts/trust-fence.ts` 与运行时 `dsh-client-connection` 是否仍逐条对齐。
+5. 只有新版本出现**迫使改代码的破坏性变更**时才抬 floor；否则 floor 不动。
+6. 更新 `CHANGELOG.md`、`README(.zh).md`、本文件、CI 注释，然后按「发布」一节打 tag。
+
 ### 当前状态（写作时的事实）
 
-- 本机 DSH 运行时：**0.2.1-rc.1**（全局 `dsh` CLI、Web GUI `http://127.0.0.1:3080` 与
+- 本机 DSH 运行时：**0.2.2-alpha.3**（全局 `dsh` CLI、Web GUI `http://127.0.0.1:3080` 与
   `web` profile 同一版本线）；在该运行时下 `evaluatePluginCompatibility` 对本插件判定为
-  **兼容**，且 `settings.get` / `sidechat.directory` / `sidechat.limits` /
-  `sidechat.permissions` 在真实运行时上实测可用。
-- 最近一次完整验证：`pnpm typecheck`、22 条测试、`pnpm build`（含对 0.2.1-rc.1 真实 web
-  shell 的冻结模块表校验）全绿；floor 与版本线同为 0.2.1-rc.1，没有更低的线需要复验。
+  **兼容**（返回 `undefined`），`readPluginMeta` 仍返回中英标题/描述与内联图标，且
+  `settings.get` / `sidechat.directory` / `sidechat.limits` / `sidechat.permissions`
+  在真实运行时上实测可用。
+- 最近一次完整验证（0.5.1）：`pnpm typecheck`、25 条测试、`pnpm build`（含对
+  0.2.2-alpha.3 真实 web shell 的冻结模块表校验）全绿；floor 复验（切到 `0.2.1-rc.1` +
+  `cordis@4.0.3` + `schemastery@3.18.3`）同样全绿（24 通过、1 条 0.2.2 专属用例按能力跳过），
+  随后切回 0.2.2-alpha.3 复归。
 - 安装位置：`web` profile 以 `link:D:/code/DSH-side-chat` 链接；`desktop` profile 目前
   未安装本插件（装它走 `dsh plugin --profile desktop add …`；桌面应用必须**先完全退出**，
   CLI 才允许写 desktop profile）。
@@ -99,8 +157,69 @@ pnpm build          # 末尾依次跑 check-seed-exports 与 check-dsh-compat
 - **验证发布结果别只看 packument**：`https://registry.npmjs.org/dsh-side-chat-plus` 的
   `versions`／`dist-tags` 会滞后十几分钟，而 `<pkg>/<version>` 与
   `<pkg>/-/<pkg>-<version>.tgz` 是实时的。曾因此把一次成功的 CI 发布误判成失败。
-- **本机直连 `registry.npmjs.org` 发布不可靠**（`ECONNRESET`／网络超时，连元数据 GET 都会被重置），
-  发布请走 tag → `publish.yml`；本地只用 `pnpm pack` 校验产物内容。
+- 发布**不是**本地做的事，见下面的「## 发布」：只走 git tag → `publish.yml`。
+  本机直连 `registry.npmjs.org` 会被 `ECONNRESET`／超时重置，连元数据 GET 都过不去；
+  本地只用 `pnpm pack` 校验产物内容。
+- **「0.5.0 装不上」的真实原因多半是 `npmmirror` 元数据滞后，不是兼容性**（2026-10-19 实测）：
+  本机 `~/.npmrc` 的 `registry` 指向 `https://registry.npmmirror.com/`，该镜像的 packument 停在
+  `0.4.3`（`time.modified = 2026-09-24`，`versions` 里没有 `0.5.0`），于是
+  `dsh plugin add dsh-side-chat-plus@0.5.0` 直接报
+  `ERR_PNPM_NO_MATCHING_VERSION ... while fetching it from https://registry.npmmirror.com/`，
+  同时 `latest = 0.4.3` 还会让不带版本号的 `add` 落到那个在 0.2.1 线被拒装的旧版。
+  但镜像 **CDN 上的 tarball 其实已经回源存在**，只是元数据没刷新。两条实测可装的命令：
+
+  ```bash
+  # A. 这一次绕开镜像的元数据（已验证：7.4s 装上 0.5.0）
+  dsh plugin --profile <p> add dsh-side-chat-plus@0.5.0 --registry https://registry.npmjs.org/
+  # B. 用镜像 CDN 的 tarball 直连（已验证：733ms，不依赖 npmjs 连通性）
+  dsh plugin --profile <p> add https://cdn.npmmirror.com/packages/dsh-side-chat-plus/0.5.0/dsh-side-chat-plus-0.5.0.tgz
+  ```
+
+  注意 `npm_config_registry=` 环境变量压不住 profile 的 registry 配置，只有 pnpm 的
+  `--registry` 参数有效；`PUT https://registry.npmmirror.com/-/package/dsh-side-chat-plus/syncs`
+  会返回 201 但元数据要过一段时间才刷新，别指望立刻见效。核对时直接查实时接口
+  `https://registry.npmjs.org/-/package/dsh-side-chat-plus/dist-tags`（那里 `latest` 就是 `0.5.0`），
+  不要用本机 `npm view`——它走镜像，会给你 `0.4.3` 的假象。
+
+## 发布（唯一路径：git tag → `publish.yml`）
+
+**发布 = 往 GitHub 推一个 `v*` tag，由 CI 构建并发布。本地不做发布动作。**
+（用户 2026-10-19 明确要求：走 git 发布，记住这条，别再给本地 `npm publish` 的路子。）
+
+- 触发：`.github/workflows/publish.yml`，`on.push.tags: ['v*']`；另有 `workflow_dispatch`
+  只用于**重跑一次失败的发布**。
+- 流程：
+
+  ```bash
+  pnpm typecheck && pnpm test     # 本地先绿，CI 还会再跑一遍
+  # 改版本相关内容（CHANGELOG、README 顶部的版本说明等）并提交
+  git commit -am "release(side-chat): 0.5.1 …"
+  git push origin main
+  git tag v0.5.1
+  git push origin v0.5.1          # ← 这一步才是发布
+  ```
+
+- 版本真源是 **tag 名**：CI 从 tag 剥掉 `v` 写回 `package.json` 与 `dsh.plugin.json`，
+  然后 `pnpm publish --provenance`。所以 tag 与 `package.json` 不一致时以 tag 为准；
+  `package.json` 里的 version 只在 `workflow_dispatch` 时兜底。tag 命名必须是 `vX.Y.Z`
+  （预发布写 `vX.Y.Z-rc.1` 这类）。
+- dist-tag 自动决定：版本里带预发布后缀 → 用该后缀首段（`0.5.1-rc.1` → `rc`）；
+  不带 → `latest`。预发布绝不能落到 `latest`，否则会把稳定线挤掉。
+- CI 里 `pnpm build`、`check-seed-exports`、`check-dsh-compat` 全部通过才会发布；
+  发布失败先看 Actions 日志，修好再打**新 tag**（npm 不允许重发同版本号），或确认是
+  发布环节失败后用 `workflow_dispatch` 重跑。
+- 本地只做产物校验：`pnpm pack` / 解包看 `lib/`、`dsh.plugin.json`、`locale/`、
+  `assets/` 是否齐全。**不要** `npm publish`／`pnpm publish`：本机直连
+  `registry.npmjs.org` 会被重置，且那样发出去的包没有 provenance。
+- 发布后核对用**实时接口**（packument 会滞后十几分钟）：
+
+  ```bash
+  curl -s https://registry.npmjs.org/-/package/dsh-side-chat-plus/dist-tags
+  curl -sI https://registry.npmjs.org/dsh-side-chat-plus/-/dsh-side-chat-plus-<版本>.tgz | head -1
+  ```
+
+- 下游镜像（`registry.npmmirror.com`）同步滞后**不是**发布问题，也**不是**改本地发布的理由：
+  安装端按「当前状态」里那两条命令（`--registry` 或 CDN tarball）临时绕过即可。
 
 ## 构建与产物
 
@@ -122,6 +241,16 @@ pnpm build          # 末尾依次跑 check-seed-exports 与 check-dsh-compat
 - 「带回主会话」写入的是 V4 **producer-owned source**（`plugin:dsh-side-chat`），
   旧的 `kind: 'plugin'` 会被严格持久化校验拒绝。
 - 侧边会话默认归档；推理期间临时取消归档，本轮 settle 后恢复归档。
+- **模型选择走两条线**：出现 `AgentModel` 导出（0.2.2-alpha.3+）时用
+  `agent.model.select()` 记录持久选择——它在步骤准备前固定路由，agent-loop 会对
+  `agent/request` 里改写 provider/model 的监听器**直接抛错**；0.2.1 线仍用
+  `installModelSelection(agentCtx, selection)` 的可变 ref。创建侧边聊天时先记录继承路由，
+  `sidechat.selectModel` 后追加新选择；继承发起会话时优先读 `agent.model.current()`，
+  再退回 `requestHeader().config` 与 agent options。
+- 0.2.2-alpha.3 新增原生文本交互面（`uiConversation.interactions` +
+  `conversation.chat.text-interaction` 插槽，可选插件 `dsh-message-quotes` 用于「引用」）；
+  本插件的选中浮动菜单仍用 document `selectionchange`，不注册该面——两者同装时会有两个
+  入口，属交互重叠。
 - 宿主路由在 `/sidechat/api/*`；客户端 bundle 有两个频道 id
   （`dsh-side-chat-plus` 与 `dsh-external/dsh-side-chat-plus`），两者都要顾及。
 - `src/trust-fence.ts` 是 DSH `/api` 信任栅栏的自带副本，必须与运行时逐条对齐：loopback、
