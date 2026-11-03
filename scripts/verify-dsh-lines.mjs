@@ -159,8 +159,18 @@ function manifestFor(line, pairing) {
   return `${JSON.stringify(next, null, 2)}\n`
 }
 
+/**
+ * Install the swapped manifest.
+ *
+ * `--no-frozen-lockfile` is required, not cosmetic: pnpm defaults
+ * `frozen-lockfile` to true whenever `CI` is set, and the swap deliberately
+ * makes the lockfile stale (package.json now names another DSH line), so a plain
+ * `pnpm install` fails with ERR_PNPM_OUTDATED_LOCKFILE on every CI runner while
+ * passing on a developer machine. The restore install needs the same flag for
+ * the same reason.
+ */
 function install() {
-  shell(['install', '--registry', registry])
+  shell(['install', '--no-frozen-lockfile', '--registry', registry])
 }
 
 function restore() {
