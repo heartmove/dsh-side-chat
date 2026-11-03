@@ -1,3 +1,23 @@
+# 0.5.2
+
+0.5.1 的代码内容不变，**发布的安装阶段修复**。
+
+- **0.5.1 在 CI 的 `Install dependencies` 阶段失败，npm 上没有 0.5.1**：本机
+  `minimumReleaseAge=0`，而 CI 用 pnpm 默认的 1440 分钟，0.2.2-alpha.3 当天发布，锁文件里
+  6 个条目过不了供应链闸门——
+  `@deepseek-ai/dsh-official-bundles@0.2.2-alpha.3`、
+  `@deepseek-ai/dsh-util-time@0.2.2-alpha.3`（dsh 的传递依赖）、
+  `@deepseek-ai/cordis-plugin-group@1.0.6-alpha.2`、
+  `@deepseek-ai/cordis-plugin-include@1.0.11-alpha.2`、
+  `@deepseek-ai/cordis-plugin-loader@1.0.7-alpha.2`、
+  `@deepseek-ai/cosmokit@1.8.7-alpha.2`。
+  `pnpm-workspace.yaml` 的 `minimumReleaseAgeExclude` 已补齐这 6 条（名单覆盖该线解析出的
+  **每一个**包，不只是点名的开发依赖）。
+- **新增 `pnpm check:age`**（= `pnpm install --frozen-lockfile --config.minimumReleaseAge=1440`）：
+  本机复现 CI 的供应链闸门，推之前必跑。
+- AGENTS.md 规则 5 补上这次的教训与检查命令；版本号跳到 0.5.2（npm 不允许重发同一版本，
+  失败的 `v0.5.1` tag 已删除）。
+
 # 0.5.1
 
 对照 DSH **0.2.2-alpha.3** 的 release notes 与真实运行时做的一轮兼容性修复。

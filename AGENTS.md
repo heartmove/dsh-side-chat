@@ -50,8 +50,18 @@
    跑两条线**（0.5.1 已按此跑过，见「当前状态」）。
 5. 升 DSH 版本线时，把新版本逐个加进 `pnpm-workspace.yaml` 的
    `minimumReleaseAgeExclude`。pnpm 11 默认 `minimumReleaseAge=1440`（1 天），刚发布的
-   DSH 版本不在白名单里会报 `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`。**保留旧版本的
-   条目**，这样可以随时把 devDependencies 切回 floor 做复验。
+   版本不在白名单里会报 `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`；**CI 的
+   `pnpm install --frozen-lockfile` 会直接失败**（0.5.1 就栽在这里：本机
+   `minimumReleaseAge=0` 看不见，CI 默认 1440 当场拒绝）。**保留旧版本的条目**，这样可以
+   随时把 devDependencies 切回 floor 做复验。
+
+   - 要覆盖**该线解析出来的每一个包**，不只是 package.json 里点名的那些：0.5.1 漏掉的是
+     `@deepseek-ai/dsh-official-bundles`、`@deepseek-ai/dsh-util-time`（dsh 的传递依赖）
+     以及 `cordis-plugin-group@1.0.6-alpha.2`、`cordis-plugin-include@1.0.11-alpha.2`、
+     `cordis-plugin-loader@1.0.7-alpha.2`、`cosmokit@1.8.7-alpha.2`。
+   - 本机等价校验（推之前必跑）：`pnpm check:age`
+     （= `pnpm install --frozen-lockfile --config.minimumReleaseAge=1440`），它复现 CI 的
+     供应链闸门。
 6. 新增/删除任何 `@deepseek-ai/dsh-*` 依赖时，`peerDependencies` 与 `devDependencies`
    一起改，并同步 `dsh.plugin.json`。
 

@@ -1,11 +1,11 @@
 packages:
   - .
 minimumReleaseAgeExclude:
-  - '@deepseek-ai/cordis-plugin-group@1.0.3 || 1.0.5'
-  - '@deepseek-ai/cordis-plugin-include@1.0.8 || 1.0.10'
-  - '@deepseek-ai/cordis-plugin-loader@1.0.4 || 1.0.6'
+  - '@deepseek-ai/cordis-plugin-group@1.0.3 || 1.0.5 || 1.0.6-alpha.2'
+  - '@deepseek-ai/cordis-plugin-include@1.0.8 || 1.0.10 || 1.0.11-alpha.2'
+  - '@deepseek-ai/cordis-plugin-loader@1.0.4 || 1.0.6 || 1.0.7-alpha.2'
   - '@deepseek-ai/cordis@4.0.3 || 4.0.6-alpha.2'
-  - '@deepseek-ai/cosmokit@1.8.4 || 1.8.6'
+  - '@deepseek-ai/cosmokit@1.8.4 || 1.8.6 || 1.8.7-alpha.2'
   - '@deepseek-ai/dsh-agent-preset-registry@0.2.0-rc.1 || 0.2.0-rc.2 || 0.2.1-rc.1 || 0.2.2-alpha.3'
   - '@deepseek-ai/dsh-agent@0.2.0-rc.1 || 0.2.0-rc.2 || 0.2.1-rc.1 || 0.2.2-alpha.3'
   - '@deepseek-ai/dsh-app-boot@0.2.0-rc.1 || 0.2.0-rc.2 || 0.2.1-rc.1 || 0.2.2-alpha.3'
@@ -62,6 +62,8 @@ minimumReleaseAgeExclude:
   - '@deepseek-ai/schemastery@3.18.3 || 3.18.5 || 3.18.6-alpha.2'
   - '@deepseek-ai/dsh-fs@0.2.1-rc.1 || 0.2.2-alpha.3'
   - '@deepseek-ai/dsh-working-directory@0.2.1-rc.1 || 0.2.2-alpha.3'
+  - '@deepseek-ai/dsh-util-time@0.2.2-alpha.3'
+  - '@deepseek-ai/dsh-official-bundles@0.2.2-alpha.3'
 
 # The `@deepseek-ai/dsh-*` packages install from the configured registry at the
 # ranges in package.json — there is deliberately no local-checkout override, so
